@@ -8,3 +8,5 @@
 vignettes/pkgdown
 
 ^pkgdown$
+^\.positai$
+^\.claude$
