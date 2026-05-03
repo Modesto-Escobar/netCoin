@@ -155,3 +155,8 @@ barCoin<-function(data, variables = colnames(data), commonlabel = NULL,
   }
   else warning("Input is not a dichotomous matrix of incidences")
 }
+
+## Method ----
+summary.barCoin <- function(object, ...){
+  summaryNet(object)
+}

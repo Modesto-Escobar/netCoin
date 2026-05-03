@@ -6,10 +6,11 @@
 [![License: GPL (>= 2)](https://img.shields.io/badge/license-GPL%20(%3E%3D%202)-blue.svg)](https://www.gnu.org/licenses/gpl-2.0)
 <!-- badges: end -->
 
-**netCoin** joins the data-analysis power of R with the interactive visualisation
-libraries of JavaScript to produce **coincidence, co-occurrence and correlation
-networks** that can be explored directly in the browser, embedded in HTML
-reports, or integrated into Shiny applications.
+**netCoin** combines the data analysis capabilities of R with the 
+interactive visualization libraries of JavaScript to create networks of coincidences, 
+co-occurrences, correlations and regressions that can be explored directly 
+in a browser, embedded in HTML files or integrated into Shiny applications. 
+It also generates networked HTML galleries and other plots of coincidences.
 
 ## Mission
 
@@ -48,7 +49,7 @@ Or the development version from GitHub:
 
 ```r
 # install.packages("remotes")
-remotes::install_github("Modesto-Escobar/netCoin-2.x")
+remotes::install_github("Modesto-Escobar/netCoin")
 ```
 
 ## Quick start
@@ -87,7 +88,7 @@ Interactive visualisations are powered by D3.js through the companion package
 
 ## Documentation
 
-- Package website: <https://modesto-escobar.github.io/netCoin-2.x/>
+- Package website: <https://modesto-escobar.github.io/netCoin/>
 - Vignettes (after installation):
 
   ```r

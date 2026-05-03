@@ -3,7 +3,7 @@
 \docType{package}
 \title{The netCoin package.}
 \description{
-Create interactive networked coincidences. It joins the data analysis power of \R to study coincidences and the visualization libraries of JavaScript in one package.
+netCoin combines the data analysis capabilities of R with the interactive visualization libraries of JavaScript to create \bold{networks of coincidences, co-occurrences, correlations and regressions} that can be explored directly in a browser, embedded in HTML files or integrated into Shiny applications. It also generates \bold{networked HTML galleries} and other \bold{plots of coincidences}.
 }
 \details{
 Coincidence analysis detects what events, characters, objects, attributes, or characteristics tend to occur together within certain limits.
