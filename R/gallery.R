@@ -8,7 +8,20 @@ exhibit <- gallery2_rd3
 
 gallery3 <- gallery3_rd3
 
-netGalleryWrapper <- function(net){
+netGalleryWrapper <- function(treeGallery_function, tree, deep, initialType, tableformat, ...){
+  args <- list(...)
+  args$tree <- tree
+  if(deep){
+    args$deep <- TRUE
+  }
+  args$initialType <- initialType
+  args$tableformat <- tableformat
+  dir <- NULL
+  if(!is.null(args$dir)){
+    dir <- args$dir
+    args$dir <- NULL
+  }
+  net <- do.call(treeGallery_function,args)
   if(!is.null(net$options$nodeTypes) && !is.null(net$options$nodeText)){
     net$nodes[[net$options$nodeText]] <- sapply(seq_len(nrow(net$nodes)),function(i){
       ntext <- net$nodes[i,net$options$nodeText]
@@ -62,23 +75,23 @@ netGalleryWrapper <- function(net){
     })
   }
   class(net) <- c("netGallery",class(net))
+  if(!is.null(dir)){
+    rD3plot:::galleryCreate(net,dir)
+  }
   return(net)
 }
 
 netGallery <- function(tree, deep = FALSE, initialType = NULL, tableformat = FALSE, ...){
-  net <- treeGallery_rd3(tree, deep, initialType, tableformat, ...)
-  return(netGalleryWrapper(net))
+  return(netGalleryWrapper(treeGallery_rd3, tree, deep, initialType, tableformat, ...))
 }
 
 netGallery2 <- function(tree, initialType = NULL, tableformat = FALSE, ...){
   warning("Using 'netGallery2' function is deprecated. Use 'netExhibit' instead.")
-  net <- treeGallery2_rd3(tree, initialType, tableformat, ...)
-  return(netGalleryWrapper(net))
+  return(netExhibit(tree, initialType, tableformat, ...))
 }
 
 netExhibit <- function(tree, initialType = NULL, tableformat = FALSE, ...){
-  net <- treeGallery2_rd3(tree, initialType, tableformat, ...)
-  return(netGalleryWrapper(net))
+  return(netGalleryWrapper(treeGallery2_rd3, tree, FALSE, initialType, tableformat, ...))
 }
 
 asGallery <- function(net){

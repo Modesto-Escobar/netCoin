@@ -50,7 +50,7 @@ tree <- data.frame(
     "Elijah Wood|Viggo Mortensen|Ian McKellen", "Clint Eastwood|Eli Wallach|Lee Van Cleef")
 )
 
-gallery <- netGallery(tree, initialType="film", tableformat=TRUE, color="type", zoom=2)
+gallery <- netGallery(tree, initialType="film", tableformat=TRUE, color="type", scale=2)
 
 \dontrun{
 plot(gallery)
