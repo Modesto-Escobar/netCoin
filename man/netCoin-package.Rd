@@ -75,5 +75,8 @@ Escobar, M. (2009): "Redes Semanticas en Textos Periodisticos: Propuestas Tecnic
 Escobar, M.(2015): "Studying Coincidences with Network Analysis and Other Multivariate Tools", in \emph{The Stata Journal}, 15(4), 1118-1156.
 
 Escobar, M. and J. Gomez Isla (2015): "The Expression of Identity through the Image: The Photographic Archives of Miguel de Unamuno and Joaquin Turina", en \emph{Revista Espanola de Investigaciones Sociologicas}, 152, 23-46.
+
+Escobar, M. and L. Martínez-Uribe (2020): "Network Coincidence Analysis: The netCoin R Package", en \emph{Journal of Statistical Software}, 93(11), 1-31.
+
 }
 
