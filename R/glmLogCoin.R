@@ -13,7 +13,7 @@ glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
   cleanVariables <- function(x){
     x <- iconv(x,to="ASCII//TRANSLIT")
     x <- gsub(" ",".",x)
-    return(gsub("[^a-zA-z_]",".",x))
+    return(gsub("[^a-zA-z0-9_]",".",x))
   }
   originalNames <- colnames(data)
   colnames(data) <- cleanVariables(colnames(data))
@@ -32,7 +32,9 @@ glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
   arguments <- list(nodes = prenet$Nodes, links = prenet$Links,
     showArrows=showArrows, color=color, linkFilter=paste0("p.value<",pmax),
     lwidth=lwidth, lcolor=lcolor, language=language, ...)
-  arguments$linkBipolar <- TRUE
+  if(is.null(arguments$linkBipolar)){
+    arguments$linkBipolar <- TRUE
+  }
   for(i in cleanedNamesIndex){
     arguments$nodes[,'name'] <- gsub(colnames(data)[i],originalNames[i],arguments$nodes[,'name'],fixed=TRUE)
     arguments$links[,'Source'] <- gsub(colnames(data)[i],originalNames[i],arguments$links[,'Source'],fixed=TRUE)
@@ -262,7 +264,7 @@ glmCoin2 <- function(formulas, data, weights=NULL, pmax=.05, twotail=FALSE, show
   cleanVariables <- function(x){
     x <- iconv(x,to="ASCII//TRANSLIT")
     x <- gsub(" ",".",x)
-    return(gsub("[^a-zA-z_]",".",x))
+    return(gsub("[^a-zA-z0-9_]",".",x))
   }
   originalNames <- colnames(data)
   colnames(data) <- cleanVariables(colnames(data))
