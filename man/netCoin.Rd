@@ -25,10 +25,10 @@ netCoin(nodes = NULL, links = NULL, tree = NULL,
         repulsion = 25, distance = 10, zoom = 1,
         fixed = showCoordinates, limits = NULL,
         main = NULL, note = NULL, showCoordinates = FALSE, showArrows = FALSE,
-        showLegend = TRUE, frequencies = FALSE, showAxes = FALSE,
-        axesLabels = NULL, scenarios = NULL, help = NULL, helpOn = FALSE,
-        mode = c("network","heatmap"), roundedItems = FALSE, controls = 1:8,
-        cex = 1, background = NULL, defaultColor = "#1f77b4",
+        showLegend = TRUE, frequencies = FALSE, statistics = FALSE,
+        showAxes = FALSE, axesLabels = NULL, scenarios = NULL, help = NULL,
+        helpOn = FALSE, mode = c("network","heatmap"), roundedItems = FALSE,
+        controls = 1:8, cex = 1, background = NULL, defaultColor = "#1f77b4",
         language = c("en","es","ca"), dir = NULL)
 }
 \arguments{
@@ -72,6 +72,7 @@ netCoin(nodes = NULL, links = NULL, tree = NULL,
 \item{main}{upper title of the graph.}
 \item{note}{lower title of the graph.}
 \item{frequencies}{a logical value true if the frequencies can be shown in barplots. Default = FALSE.}
+\item{statistics}{a logical value true if the possibility of calculating statistics with the nodes will be added to the final graph.}
 \item{help}{help text of the graph.}
 \item{helpOn}{Should the help be shown at the beginning?}
 \item{background}{background color or image of the graph.}

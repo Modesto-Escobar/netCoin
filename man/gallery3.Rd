@@ -13,7 +13,8 @@ gallery3(nodes, name = NULL, label = NULL, subtitle = NULL, order = NULL,
     decreasing = FALSE, ntext = NULL,
     mainframeHeight = NULL, mainframeWidth = NULL, mainframeImage = 0,
     image = NULL, imageCopy = NULL, imageRatio = NULL, noFilterCols = NULL,
-    zoom = NULL, scale = NULL, main = NULL, note = NULL, tableButton = FALSE,
+    zoom = NULL, scale = NULL, main = NULL, note = NULL,
+    tableButton = FALSE, export = FALSE,
     search = TRUE, cex = 1, language = c("en", "es", "ca"), dir = NULL)
 }
 \arguments{
@@ -37,6 +38,7 @@ gallery3(nodes, name = NULL, label = NULL, subtitle = NULL, order = NULL,
 \item{note}{lower title of the graph.}
 \item{search}{Should gallery search be displayed? (default: TRUE)}
 \item{tableButton}{A button will appear to show the data as a table.}
+\item{export}{A button will appear to export gallery as excel.}
 \item{cex}{number indicating the amount by which plotting text should be scaled relative to the default.}
 \item{language}{a character string indicating the language of the graph (en=english (default); es=spanish; ca=catalan).}
 \item{dir}{a character string representing the directory where the web files will be saved.}

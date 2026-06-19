@@ -16,7 +16,7 @@ netCoin <- function(nodes = NULL, links = NULL, tree = NULL,
         repulsion = 25, distance = 10, zoom = 1,
         fixed = showCoordinates, limits = NULL,
         main = NULL, note = NULL, showCoordinates = FALSE, showArrows = FALSE,
-        showLegend = TRUE, frequencies = FALSE, showAxes = FALSE,
+        showLegend = TRUE, frequencies = FALSE, statistics = FALSE, showAxes = FALSE,
         axesLabels = NULL, scenarios = NULL, help = NULL, helpOn = FALSE,
         mode = c("network","heatmap"), roundedItems = FALSE, controls = 1:8,
         cex = 1, background = NULL, defaultColor = "#1f77b4",
@@ -30,13 +30,13 @@ netCoin <- function(nodes = NULL, links = NULL, tree = NULL,
     stop("Using netCoin function to change netCoin object attributes is deprecated. Use addNetCoin instead.")
   }
 
-  name <- nameByLanguage(name,language,nodes)
   if(!is.null(nodes)){
-      if (all(inherits(nodes,c("tbl_df","tbl","data.frame"),TRUE))) nodes<-as.data.frame(nodes) # convert haven objects
+    nodes <- as.data.frame(nodes)
   }
   if(!is.null(links)){
-      if (all(inherits(links,c("tbl_df","tbl","data.frame"),TRUE))) links<-as.data.frame(links) # convert haven objects
+    links <- as.data.frame(links)
   }
+  name <- nameByLanguage(name,language,nodes)
 
   color <- setAttrByValueKey("color",color,nodes)
   shape <- setAttrByValueKey("shape",shape,nodes)
@@ -56,7 +56,7 @@ netCoin <- function(nodes = NULL, links = NULL, tree = NULL,
         repulsion = repulsion, distance = distance, zoom = zoom,
         fixed = fixed, limits = limits,
         main = main, note = note, showCoordinates = showCoordinates, showArrows = showArrows,
-        showLegend = showLegend, frequencies = frequencies, showAxes = showAxes,
+        showLegend = showLegend, frequencies = frequencies, statistics = statistics, showAxes = showAxes,
         axesLabels = axesLabels, scenarios = scenarios, help = help, helpOn = helpOn,
         mode = mode, roundedItems = roundedItems, controls = controls, cex = cex,
         background = background, defaultColor = defaultColor,
@@ -142,6 +142,7 @@ addNetCoin <- function(x, ...){
       "linkBipolar" = "linkBipolar",
       "helpOn" = "helpOn",
       "frequencies" = "frequencies",
+      "statistics" = "statistics",
       "defaultColor" = "defaultColor",
       "controls" = "controls",
       "mode" = "mode",

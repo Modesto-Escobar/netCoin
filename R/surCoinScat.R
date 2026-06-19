@@ -281,6 +281,7 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
   arguments$frequencies <- TRUE
   arguments$showAxes <- TRUE
   arguments$showCoordinates <- TRUE
+  arguments$statistics <- TRUE
   arguments$degreeFilter <- NULL
   if(is.null(arguments$label)) arguments$label <- ""
   if(is.null(arguments$controls)) arguments$controls <- c(1,4)  
