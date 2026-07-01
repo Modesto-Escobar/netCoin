@@ -284,7 +284,7 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
   arguments$statistics <- TRUE
   arguments$degreeFilter <- NULL
   if(is.null(arguments$label)) arguments$label <- ""
-  if(is.null(arguments$controls)) arguments$controls <- c(1,4)  
+  if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)  
   return(do.call(netCoin, arguments))
 }
 
