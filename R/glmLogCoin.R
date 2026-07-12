@@ -1,9 +1,8 @@
 ## glmCoin ----
 glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
-        robust=FALSE, twotail=FALSE, showArrows=TRUE,
-        frequency = FALSE, percentage = TRUE, 
+        robust=FALSE, showArrows=TRUE,
         color="variable", lwidth="s.value", lcolor="estimate",
-        circle= NA, language=c("en","es","ca"),
+        language=c("en","es","ca"),
         igraph=FALSE, ...) {
   vcov <- stats::vcov
   if(robust){
@@ -13,7 +12,7 @@ glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
   cleanVariables <- function(x){
     x <- iconv(x,to="ASCII//TRANSLIT")
     x <- gsub(" ",".",x)
-    return(gsub("[^a-zA-z0-9_]",".",x))
+    return(gsub("[^a-zA-Z0-9_]",".",x))
   }
   originalNames <- colnames(data)
   colnames(data) <- cleanVariables(colnames(data))
@@ -25,31 +24,108 @@ glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
   }
   if (is.character(weights)){
     weights <- cleanVariables(weights)
+    if(!weights %in% colnames(data)) stop("Weights variable '",weights,"' not found in data")
     weights<-data[[weights]]
   }
 
-  prenet <- contr.gw(formulas, data=data, weights=weights, vcov=vcov)
+  prenet <- contr.gw(formulas, data=data, weights=weights, vcov=vcov, .keep_models=TRUE)
+  equations <- eqSummary(prenet$models, formulas)
   arguments <- list(nodes = prenet$Nodes, links = prenet$Links,
     showArrows=showArrows, color=color, linkFilter=paste0("p.value<",pmax),
     lwidth=lwidth, lcolor=lcolor, language=language, ...)
   if(is.null(arguments$linkBipolar)){
     arguments$linkBipolar <- TRUE
   }
-  for(i in cleanedNamesIndex){
-    arguments$nodes[,'name'] <- gsub(colnames(data)[i],originalNames[i],arguments$nodes[,'name'],fixed=TRUE)
-    arguments$links[,'Source'] <- gsub(colnames(data)[i],originalNames[i],arguments$links[,'Source'],fixed=TRUE)
-    arguments$links[,'Target'] <- gsub(colnames(data)[i],originalNames[i],arguments$links[,'Target'],fixed=TRUE)
-    arguments$links[,'Model'] <- gsub(colnames(data)[i],originalNames[i],arguments$links[,'Model'],fixed=TRUE)
- }
+  if(length(cleanedNamesIndex)){
+    cleanedToOriginal <- originalNames[cleanedNamesIndex]
+    names(cleanedToOriginal) <- colnames(data)[cleanedNamesIndex]
+    restoreNames <- function(x){ # labels are variable[*variable][:categories]
+      vapply(as.character(x), function(s){
+        sep <- regexpr(":", s, fixed=TRUE)
+        vars <- if(sep>0) substr(s, 1, sep-1) else s
+        rest <- if(sep>0) substr(s, sep, nchar(s)) else ""
+        tokens <- strsplit(vars, "*", fixed=TRUE)[[1]]
+        found <- match(tokens, names(cleanedToOriginal))
+        tokens[!is.na(found)] <- cleanedToOriginal[found[!is.na(found)]]
+        paste0(paste(tokens, collapse="*"), rest)
+      }, character(1), USE.NAMES=FALSE)
+    }
+    restoreFormulas <- function(x){ # replace whole name tokens only
+      for(i in cleanedNamesIndex){
+        pattern <- paste0("(?<![a-zA-Z0-9._])", gsub(".","\\.",colnames(data)[i],fixed=TRUE), "(?![a-zA-Z0-9._])")
+        x <- gsub(pattern, originalNames[i], x, perl=TRUE)
+      }
+      return(x)
+    }
+    if(!is.null(arguments$nodes)) arguments$nodes[,'name'] <- restoreNames(arguments$nodes[,'name'])
+    if(!is.null(arguments$links) && nrow(arguments$links)){
+      arguments$links[,'Source'] <- restoreNames(arguments$links[,'Source'])
+      arguments$links[,'Target'] <- restoreNames(arguments$links[,'Target'])
+      arguments$links[,'Model'] <- restoreFormulas(arguments$links[,'Model'])
+    }
+    if(!is.null(equations)) equations$model <- restoreFormulas(equations$model)
+  }
   if(arguments$language[1]!="en"){
     colnames(arguments$nodes)[colnames(arguments$nodes)=="name"] <- getByLanguage(nameList,arguments$language[1])
   }
   net <- do.call(netCoin, arguments)
-  if(igraph) net <- toIgraph(net)
+  net$equations <- equations
+  if(igraph) net <- igraph::set_graph_attr(toIgraph(net), "equations", equations)
   return(net)
 }
 
 ## See file contrast.gw.R for more
+
+## Fit measures per equation for glmCoin ----
+eqSummary <- function(models, spec){
+  declared <- vapply(.parse_specs(spec), function(e){
+    if(is.null(e$family)) "gaussian"
+    else if(is.character(e$family)) e$family
+    else e$family$family
+  }, character(1))
+  modelLab <- vapply(names(models), function(s) .split_top_level(s)$lhs, character(1), USE.NAMES=FALSE)
+  rows <- lapply(seq_along(models), function(i){
+    m <- models[[i]]
+    mf <- stats::model.frame(m)
+    y <- stats::model.response(mf)
+    w <- stats::model.weights(mf)
+    if(is.null(w)){ # multinom's model.frame drops the weights column
+      w <- tryCatch(eval(m$call$weights, environment(stats::formula(m))), error=function(e) NULL)
+      if(!is.null(w) && length(w)!=nrow(mf)) w <- NULL
+    }
+    nobs <- tryCatch(stats::nobs(m), error=function(e) nrow(mf))
+    if(is.null(nobs) || is.na(nobs)) nobs <- nrow(mf)
+    n <- if(is.null(w)) nobs else sum(w) # weighted N: deviances and logLik already scale with it
+    nullArgs <- list(formula = y ~ 1)
+    if(!is.null(w)) nullArgs$weights <- w
+    m0 <- tryCatch({
+      if(inherits(m,"multinom")) do.call(nnet::multinom, c(nullArgs, list(trace=FALSE)))
+      else if(inherits(m,"glm")) do.call(stats::glm, c(nullArgs, list(family=m$family)))
+      else do.call(stats::lm, nullArgs)
+    }, error=function(e) NULL)
+    dev  <- suppressWarnings(tryCatch(stats::deviance(m), error=function(e) NA_real_))
+    dev0 <- if(is.null(m0)) NA_real_ else suppressWarnings(tryCatch(stats::deviance(m0), error=function(e) NA_real_))
+    ll   <- suppressWarnings(tryCatch(as.numeric(stats::logLik(m)), error=function(e) NA_real_))
+    ll0  <- if(is.null(m0)) NA_real_ else suppressWarnings(tryCatch(as.numeric(stats::logLik(m0)), error=function(e) NA_real_))
+    r2 <- 1-dev/dev0
+    mcfadden <- 1-ll/ll0
+    if(!is.na(ll) && !is.na(ll0)){ # likelihood-based Cox-Snell; deviance-based for quasi families
+      nagelkerke <- (1-exp(2*(ll0-ll)/n))/(1-exp(2*ll0/n))
+    } else {
+      nagelkerke <- (1-exp((dev-dev0)/n))/(1-exp(-dev0/n))
+    }
+    aic <- suppressWarnings(tryCatch(stats::AIC(m), error=function(e) NA_real_))
+    bic <- suppressWarnings(tryCatch(stats::BIC(m), error=function(e) NA_real_))
+    dfres <- tryCatch(stats::df.residual(m), error=function(e) NA_real_)
+    if(is.null(dfres)) dfres <- NA_real_
+    data.frame(model=modelLab[i], family=declared[i], n=round(n), n_obs=nobs,
+      r2=round(r2,3), r2.mcfadden=round(mcfadden,3), r2.nagelkerke=round(nagelkerke,3),
+      logLik=round(ll,2), aic=round(aic,2), bic=round(bic,2),
+      deviance=round(dev,2), null.deviance=round(dev0,2), df.residual=dfres,
+      stringsAsFactors=FALSE, row.names=NULL)
+  })
+  do.call(rbind, rows)
+}
 
 
 ## logCoin() ----
@@ -264,7 +340,7 @@ glmCoin2 <- function(formulas, data, weights=NULL, pmax=.05, twotail=FALSE, show
   cleanVariables <- function(x){
     x <- iconv(x,to="ASCII//TRANSLIT")
     x <- gsub(" ",".",x)
-    return(gsub("[^a-zA-z0-9_]",".",x))
+    return(gsub("[^a-zA-Z0-9_]",".",x))
   }
   originalNames <- colnames(data)
   colnames(data) <- cleanVariables(colnames(data))

@@ -406,10 +406,41 @@ contrastes_gw <- function(model, group_var, weights = NULL, vcov = "HC1") {
     }
   }
   # ----------------------------------------------------------------------------------------.
-  
-  # --- Scaled to % if the model is binomial ---
-  if (is_binom && nrow(resultado_final) > 0) {
-    pct_cols <- intersect(c("estimate","std.error","conf.low","conf.high"), names(resultado_final))
+
+  # --- Contrasts vs the first (base) category: same margins, delta-method SEs
+  base_lev <- vapply(group_var, function(v) as.character(levels(mf[[v]])[1L]), character(1))
+  is_base_row <- rep(TRUE, nrow(marg_df))
+  for (i in seq_along(group_var))
+    is_base_row <- is_base_row & as.character(marg_df[[group_var[i]]]) == base_lev[i]
+  funcion_base <- function(x) {
+    est <- x$estimate
+    res <- numeric(length(est))
+    pick <- function(idx) { b <- idx[which(is_base_row[idx])[1L]]
+                            if (is.na(b)) idx[1L] else b }
+    if ("group" %in% names(x)) {
+      for (g in unique(x$group)) {
+        idx <- which(x$group == g)
+        res[idx] <- est[idx] - est[pick(idx)]
+      }
+    } else {
+      res <- est - est[pick(seq_along(est))]
+    }
+    return(res)
+  }
+  res_base <- try(marginaleffects::hypotheses(margenes, hypothesis = funcion_base), silent = TRUE)
+  if (!inherits(res_base, "try-error")) {
+    rb <- as.data.frame(res_base)
+    resultado_final$estimate.base  <- rb$estimate
+    resultado_final$std.error.base <- rb$std.error
+    resultado_final$p.value.base   <- rb$p.value
+    resultado_final$std.error.base[is_base_row] <- NA_real_
+    resultado_final$p.value.base[is_base_row]   <- NA_real_
+  }
+
+  # --- Scaled to % if the model is binomial or multinomial ---
+  if ((is_binom || is_multinom) && nrow(resultado_final) > 0) {
+    pct_cols <- intersect(c("estimate","std.error","conf.low","conf.high",
+                            "estimate.base","std.error.base"), names(resultado_final))
     for (cc in pct_cols) resultado_final[[cc]] <- resultado_final[[cc]] * 100
   }
   
@@ -463,6 +494,7 @@ contrastes_gw_one <- function(model, weights = NULL, vcov = "HC1",
   fchar  <- as.character(stats::formula(model))
   target <- if (length(fchar) >= 2) fchar[2] else NA_character_
   is_binom <- inherits(model, "glm") && !is.null(model$family) && grepl("binomial", model$family$family, fixed = TRUE)
+  is_multinom <- inherits(model, "multinom")
   y <- if (!is.na(target) && target %in% names(mf)) mf[[target]] else NULL
   
   # --- Weights (robust) ---
@@ -570,12 +602,17 @@ contrastes_gw_one <- function(model, weights = NULL, vcov = "HC1",
             if ("conf.low" %in% names(cont_df)) cont_df$conf.low <- cont_df$conf.low * s
             if ("conf.high" %in% names(cont_df)) cont_df$conf.high <- cont_df$conf.high * s
           }
-          # --- Scaled to % if the model is binomial ---
-          if (is_binom && nrow(cont_df) > 0) {
+          # --- Scaled to % if the model is binomial or multinomial ---
+          if ((is_binom || is_multinom) && nrow(cont_df) > 0) {
             pct_cols <- intersect(c("estimate","std.error","conf.low","conf.high"), names(cont_df))
             for (cc in pct_cols) cont_df[[cc]] <- cont_df[[cc]] * 100
           }
-          
+
+          # slopes do not depend on the contrast scheme; reuse them as base contrasts
+          cont_df$estimate.base  <- cont_df$estimate
+          cont_df$std.error.base <- cont_df$std.error
+          cont_df$p.value.base   <- cont_df$p.value
+
           # Labels and cleaning (Soporte robusto para Multinomial Target)
           cont_df$Source <- if (isTRUE(stdcov)) paste0(lab, " (std)") else lab
           

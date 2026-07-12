@@ -1,7 +1,7 @@
 Package: netCoin
 Type: Package
-Version: 2.1.31
-Date: 2026-07-01
+Version: 2.1.32
+Date: 2026-07-12
 Title: Interactive Analytic Networks
 Description: Combines the data analysis capabilities of R with the interactive visualization libraries of JavaScript to create networks of coincidences, co-occurrences, correlations and regressions that can be explored directly in a browser, embedded in HTML files or integrated into Shiny applications. It also generates networked HTML galleries and other plots of coincidences. 
 License: GPL-2 | GPL-3
