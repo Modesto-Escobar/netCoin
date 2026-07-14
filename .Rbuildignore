@@ -10,3 +10,4 @@ vignettes/pkgdown
 ^pkgdown$
 ^\.positai$
 ^\.claude$
+^U\.Rdata$

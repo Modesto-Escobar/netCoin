@@ -382,7 +382,7 @@ contrastes_gw <- function(model, group_var, weights = NULL, vcov = "HC1") {
     
     if ("group" %in% names(x)) {
       for (g in unique(x$group)) {
-        idx <- which(x$group == g)
+        idx <- which(x$group %in% g) # %in%: 'group' may hold an explicit NA level
         w_g <- vector_pesos_fijo[idx]
         w_g <- w_g / sum(w_g) # rescale weights within the group
         gm_g <- sum(est[idx] * w_g)
@@ -419,7 +419,7 @@ contrastes_gw <- function(model, group_var, weights = NULL, vcov = "HC1") {
                             if (is.na(b)) idx[1L] else b }
     if ("group" %in% names(x)) {
       for (g in unique(x$group)) {
-        idx <- which(x$group == g)
+        idx <- which(x$group %in% g) # %in%: 'group' may hold an explicit NA level
         res[idx] <- est[idx] - est[pick(idx)]
       }
     } else {

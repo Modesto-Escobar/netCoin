@@ -100,6 +100,7 @@ marginsTable <- function(G,
     li <- links[links$Target == t, ]
     data.frame(variable = varOf[li$Source],
                category = sub("^[^:]*:", "", li$Source),
+               source   = li$Source,
                n        = freqOf[li$Source],
                dep      = sub(":.*$", "", t),
                target   = t,
@@ -131,8 +132,10 @@ marginsTable <- function(G,
   }
 
   rows$key <- paste(rows$variable, rows$category, sep = "\r")
-  base <- unique(rows[, c("variable", "category", "n", "key")])
-  base <- base[order(match(base$variable, varOrder), base$category), ]
+  base <- unique(rows[, c("variable", "category", "n", "key", "source")])
+  base <- base[order(match(base$variable, varOrder),          # link order keeps
+                     match(base$source, unique(links$Source))), ] # factor levels
+
 
   label <- if (by == "variable") paste0(base$variable, " (", base$category, ")")
            else paste0(base$variable, ": ", base$category)
