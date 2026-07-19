@@ -12,6 +12,15 @@ names(frequencyList) <- languages
 labelList <- c('label','etiqueta','etiqueta')
 names(labelList) <- languages
 
+groupList <- c('Group','Grupo','Grup')
+names(groupList) <- languages
+
+groupsList <- c('Groups','Grupos','Grups')
+names(groupsList) <- languages
+
+casesList <- c('Cases','Casos','Casos')
+names(casesList) <- languages
+
 ## allnet, coin, layout, netcoin-core, netcorr, path, regression, surcoin
 getByLanguage <- function(varlist,language){
   if(!is.null(language) && language[1] %in% names(varlist))

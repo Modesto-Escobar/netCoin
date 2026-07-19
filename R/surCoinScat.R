@@ -243,38 +243,93 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 
 ## surScat ----
 # surScat is a wrapper to build a netCoin object from an original non-dichotomized data.frame and see frequencies.
-surScat <- function(data, variables=names(data), active=variables, type= c("mca", "pca"), nclusters=2, maxN=2000, ...) {
-  if(type[1]=="mca") {
-    B <- as.data.frame(droplevels(as_factor(na.omit(data[,variables]))))
-    b <- B[,active]
+surScat <- function(data, variables=names(data), active=variables, type= c("mca", "pca"), nclusters=2, maxN=2000, weight=NULL, patterns=FALSE, jitter=0, seed=2020, ...) {
+  if(!is.null(seed)) {
+    if(exists(".Random.seed", envir = globalenv())) {
+      oldseed <- get(".Random.seed", envir = globalenv())
+      on.exit(assign(".Random.seed", oldseed, envir = globalenv()), add = TRUE)
+    } else {
+      on.exit(rm(".Random.seed", envir = globalenv()), add = TRUE)
+    }
+    set.seed(seed)
+  }
+  type <- match.arg(type)
+  if(inherits(weight,"character")) {
+    if(!(weight %in% names(data))) stop("weight column not found in data")
+    variables <- setdiff(variables, weight)
+    active <- setdiff(active, weight)
+    weight <- data[[weight]]
+  }
+  if(!is.null(weight) && length(weight)!=nrow(data)) stop("Weights have not the correct dimensions")
+  keep <- complete.cases(data[,variables, drop=FALSE])
+  if(!is.null(weight)) {
+    keep <- keep & !is.na(weight)
+    weight <- weight[keep]
+  }
+  D <- data[keep, variables, drop=FALSE]
+  if(patterns) { # collapse cases into unique response patterns; weight = cases (or sum of weights) per pattern
+    key <- do.call(paste, c(D, sep="\r"))
+    counts <- rowsum(if(is.null(weight)) rep(1,length(key)) else weight, key)
+    D <- D[!duplicated(key), , drop=FALSE]
+    weight <- as.vector(counts[key[!duplicated(key)],])
+    rownames(D) <- sprintf(paste0("%0",nchar(nrow(D)),"d"),seq_len(nrow(D)))
+  }
+  if(type=="mca") {
+    B <- as.data.frame(droplevels(as_factor(D)))
+    b <- B[,active, drop=FALSE]
     m <- as.matrix(dichotomize(b,variables=names(b), sort=F, add=F, nas=NULL))
-    cc <- layoutMca(m, rows=T)
+    cc <- layoutMca(m, rows=T, weight=weight)
   }
   else {
-    B <- na.omit(data[,variables])
-    b <- as.data.frame(sapply(B[,active], as.numeric))
+    if(length(active)<2) stop("type=\"pca\" requires at least two active variables")
+    B <- D
+    b <- as.data.frame(lapply(B[,active, drop=FALSE], as.numeric))
     factors <- setdiff(variables, active)
-    B[, factors] <- as.data.frame(droplevels(as_factor(B[,factors])))
+    B[, factors] <- as.data.frame(droplevels(as_factor(B[,factors, drop=FALSE])))
     B[, active]  <- b
-    m  <- prcomp(b, center = TRUE, scale. = TRUE)
-    cc <- m$x[,1:2]
-  }
-  for(i in nclusters) {
-    G <- stats::kmeans(cc, centers=i)
-    g <- paste0("Grupos(",sprintf(paste0("%0",length(levels(G$cluster)),"d"),i),")")
-    B[[g]] <- paste0("Grupo: ",sprintf(paste0("%0",length(levels(G$cluster)),"d"),G$cluster))
+    if(is.null(weight)) {
+      m  <- prcomp(b, center = TRUE, scale. = TRUE)
+      cc <- m$x[,1:2]
+    } else { # weighted PCA: weighted standardization and eigenvectors of the weighted correlation matrix
+      w <- weight/sum(weight)
+      ctr <- sweep(as.matrix(b), 2, colSums(as.matrix(b)*w))
+      std <- sweep(ctr, 2, sqrt(colSums(ctr^2*w)), "/")
+      cc <- (std %*% eigen(corr(b, weight=weight), symmetric=TRUE)$vectors)[,1:2]
+    }
   }
   arguments <- list(...)
+  if(patterns) {
+    vars <- names(B)
+    nName <- make.unique(c(names(B),"n"))[ncol(B)+1]
+    B[[nName]] <- weight
+    if(is.null(arguments$size)) arguments$size <- nName
+    txt <- rep("", nrow(B)) # HTML profile of each pattern: variable values plus number of cases
+    for(v in vars) txt <- paste0(txt, "<b>", v, "</b>: ", as.character(B[[v]]), "<br/>")
+    txt <- paste0(txt, "<b>", getByLanguage(casesList, arguments$language), "</b>: ", round(B[[nName]]))
+    tName <- make.unique(c(names(B),"ntext"))[ncol(B)+1]
+    B[[tName]] <- txt
+    if(is.null(arguments$ntext)) arguments$ntext <- tName
+  }
+  groupsWord <- getByLanguage(groupsList, arguments$language)
+  groupWord  <- getByLanguage(groupList,  arguments$language)
+  for(i in nclusters) {
+    G <- stats::kmeans(cc, centers=i)
+    g <- paste0(groupsWord,"(",sprintf(paste0("%0",nchar(max(nclusters)),"d"),i),")")
+    B[[g]] <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),G$cluster))
+  }
   arguments$name <- nameByLanguage(NULL,arguments$language,NULL)
   if(is.character(rownames(B)))  B[[arguments$name]] <- rownames(B)
   else B[[arguments$name]] <- sprintf(paste0("%0",nchar(nrow(B)),"d"),as.numeric(rownames(B)))
   B <- B[, c(active, setdiff(names(B), active))]
   if(nrow(B)>maxN) {
-    set.seed(2020)
     rcases <- sample(1:nrow(B), maxN)
     B  <- B[rcases,]
     cc <- cc[rcases,]
   }
+  if(isTRUE(jitter)) jitter <- .02
+  if(jitter>0) # visual spread only: clusters were computed on the exact coordinates
+    cc <- cc + sweep(matrix(stats::runif(2*nrow(cc),-.5,.5), ncol=2), 2,
+                     jitter*apply(cc, 2, function(z) diff(range(z))), "*")
   arguments$nodes <- B
   arguments$layout <- cc
   arguments$color <- g
@@ -324,8 +379,9 @@ corrp <- function (a, b = a, weight = NULL ){
 
 
 ## There is also a layoutMCA for other graphs
-layoutMca<-function(matrix, nfactors=2, rows=FALSE){ # Correspondencias simples clasicas aplicadas a dicotómicas.
-  P=matrix/nrow(matrix)
+layoutMca<-function(matrix, nfactors=2, rows=FALSE, weight=NULL){ # Correspondencias simples clasicas aplicadas a dicotómicas.
+  if(is.null(weight)) P=matrix/nrow(matrix)
+  else P=matrix*(weight/sum(weight)) # weighted row masses
   column.masses<-colSums(P)
   row.masses=rowSums(P)
   E=row.masses %o% column.masses
