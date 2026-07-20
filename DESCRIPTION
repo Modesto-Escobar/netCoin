@@ -15,8 +15,8 @@ Authors@R: c(
     person("David", "Barrios", email = "metal@usal.es", role = "aut"), 
     person("Carlos", "Prieto", email = "cprietos@usal.es", role = "aut", comment = c(ORCID = "0000-0003-2064-4842")),
     person("Luis", "Martinez-Uribe", email = "lmartinez@usal.es", role = "aut", comment = c(ORCID = "0000-0002-7795-3972")),
-    person("Pablo", "Cabrera-Álvarez", email = "pablocal@usal.es", role = "aut", comment= c(ORCID = "0000-0001-8105-5908")),
-    person("Cristina", "Calvo-López", email ="cristinacalvolopez@usal.es", role = "aut", comment= c(ORCID = "0000-0001-5039-1263"))
+    person("Pablo", "Cabrera-Álvarez", email = "pcabre@essex.ac.uk", role = "aut", comment= c(ORCID = "0000-0001-8105-5908")),
+    person("Cristina", "Calvo-López", email ="cristina.calvo@poli.uned.es", role = "aut", comment= c(ORCID = "0000-0001-5039-1263"))
     )
 Maintainer: Modesto Escobar <modesto@usal.es> 
 URL: https://modesto-escobar.github.io/netCoin/
