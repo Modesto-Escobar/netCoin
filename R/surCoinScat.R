@@ -253,7 +253,9 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
     }
     set.seed(seed)
   }
+  autoType <- missing(type)
   type <- match.arg(type)
+  if(autoType && all(sapply(data[,active, drop=FALSE], is.numeric))) type <- "pca"
   if(inherits(weight,"character")) {
     if(!(weight %in% names(data))) stop("weight column not found in data")
     variables <- setdiff(variables, weight)
@@ -281,7 +283,10 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
     cc <- layoutMca(m, rows=T, weight=weight)
   }
   else {
-    if(length(active)<2) stop("type=\"pca\" requires at least two active variables")
+    if(length(active)<2) {
+      if(autoType) stop("Only one quantitative active variable was found, so type=\"pca\" was chosen automatically. Include at least one more active variable, or set type=\"mca\" explicitly.")
+      else stop("type=\"pca\" requires at least two active variables")
+    }
     B <- D
     b <- as.data.frame(lapply(B[,active, drop=FALSE], as.numeric))
     factors <- setdiff(variables, active)

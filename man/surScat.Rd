@@ -16,7 +16,7 @@ surScat(data, variables=names(data), active=variables, type=c("mca", "pca"), ncl
   \item{data}{a data frame.}
   \item{variables}{a vector of variables included in the previous data frame.}
   \item{active}{a vector of active variables used to compute the coordinates.}
-  \item{type}{Factorial type: mca for qualitative active variables, pca for quantitative active variables.}
+  \item{type}{Factorial type: mca for qualitative active variables, pca for quantitative active variables. If not stated, it is chosen automatically: pca if all the active variables are quantitative, mca otherwise.}
   \item{nclusters}{number of clusters for k-means. It can be a vector, in which case one group variable is added per value.}
   \item{maxN}{Maximum number or rows.}
   \item{weight}{a numeric vector of case weights, or the name of a column of the data frame containing them (this column is then excluded from variables). Weights are used to compute the MCA or PCA coordinates (weighted category masses in MCA, weighted correlations in PCA), so the axes represent the weighted structure of the data. The k-means clustering is then computed on these weighted coordinates without further weighting. NULL (default) performs an unweighted analysis.}
