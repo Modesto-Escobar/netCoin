@@ -114,9 +114,9 @@ citation("netCoin")
   [[ORCID]](https://orcid.org/0000-0003-2064-4842)
 - Luis Martínez-Uribe (Universidad de Salamanca)
   [[ORCID]](https://orcid.org/0000-0002-7795-3972)
-- Pablo Cabrera-Álvarez (Universidad de Salamanca)
+- Pablo Cabrera-Álvarez (University of Essex)
   [[ORCID]](https://orcid.org/0000-0001-8105-5908)
-- Cristina Calvo-López (Universidad de Salamanca)
+- Cristina Calvo-López (Universidad Nacional de Educación a Distancia)
   [[ORCID]](https://orcid.org/0000-0001-5039-1263)
 
 ## Acknowledgments
