@@ -243,7 +243,8 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 
 ## surScat ----
 # surScat is a wrapper to build a netCoin object from an original non-dichotomized data.frame and see frequencies.
-surScat <- function(data, variables=names(data), active=variables, type= c("mca", "pca"), nclusters=2, maxN=2000, weight=NULL, patterns=FALSE, jitter=0, seed=2020, ...) {
+surScat <- function(data, variables=names(data), active=variables, type= c("mca", "pca"), nclusters=2, maxN=2000, weight=NULL, patterns=FALSE, jitter=0, seed=2020, clusterOn=c("factors", "variables"), ...) {
+  clusterOn <- match.arg(clusterOn)
   if(!is.null(seed)) {
     if(exists(".Random.seed", envir = globalenv())) {
       oldseed <- get(".Random.seed", envir = globalenv())
@@ -281,6 +282,7 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
     b <- B[,active, drop=FALSE]
     m <- as.matrix(dichotomize(b,variables=names(b), sort=F, add=F, nas=NULL))
     cc <- layoutMca(m, rows=T, weight=weight)
+    vm <- m # dichotomized active variables, for clustering on clusterOn="variables"
   }
   else {
     if(length(active)<2) {
@@ -295,13 +297,16 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
     if(is.null(weight)) {
       m  <- prcomp(b, center = TRUE, scale. = TRUE)
       cc <- m$x[,1:2]
+      vm <- scale(as.matrix(b)) # standardized active variables, for clustering on clusterOn="variables"
     } else { # weighted PCA: weighted standardization and eigenvectors of the weighted correlation matrix
       w <- weight/sum(weight)
       ctr <- sweep(as.matrix(b), 2, colSums(as.matrix(b)*w))
       std <- sweep(ctr, 2, sqrt(colSums(ctr^2*w)), "/")
       cc <- (std %*% eigen(corr(b, weight=weight), symmetric=TRUE)$vectors)[,1:2]
+      vm <- std
     }
   }
+  cm <- if(clusterOn=="variables") vm else cc
   arguments <- list(...)
   if(patterns) {
     vars <- names(B)
@@ -318,7 +323,7 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
   groupsWord <- getByLanguage(groupsList, arguments$language)
   groupWord  <- getByLanguage(groupList,  arguments$language)
   for(i in nclusters) {
-    G <- stats::kmeans(cc, centers=i)
+    G <- stats::kmeans(cm, centers=i)
     g <- paste0(groupsWord,"(",sprintf(paste0("%0",nchar(max(nclusters)),"d"),i),")")
     B[[g]] <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),G$cluster))
   }

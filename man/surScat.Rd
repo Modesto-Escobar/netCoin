@@ -10,7 +10,8 @@ This function creates a netCoin object and, if stated, a folder in the computer 
 
 \usage{
 surScat(data, variables=names(data), active=variables, type=c("mca", "pca"), nclusters=2,
-        maxN=2000, weight=NULL, patterns=FALSE, jitter=0, seed=2020, ...)
+        maxN=2000, weight=NULL, patterns=FALSE, jitter=0, seed=2020,
+        clusterOn=c("factors", "variables"), ...)
 }
 \arguments{
   \item{data}{a data frame.}
@@ -23,6 +24,7 @@ surScat(data, variables=names(data), active=variables, type=c("mca", "pca"), ncl
   \item{patterns}{if TRUE, cases sharing the same response pattern in all the variables are collapsed into a single node, whose size represents the number of supporting cases (or the sum of their weights): a column n is added to the nodes and used as size argument of \link{netCoin} (unless another size is stated). In addition, a column ntext with an HTML description of each pattern (the values of all its variables plus its number of cases) is generated and passed as ntext argument of \link{netCoin}, unless another ntext is stated. Coordinates and clusters are identical to those of the case by case analysis. Recommended for MCA with few qualitative variables, where cases pile up on a small number of distinct positions.}
   \item{jitter}{amount of random noise added to the coordinates before plotting, expressed as a fraction of the range of each axis (e.g. .02 = 2 percent; TRUE is a shortcut for .02). It only spreads the points visually: clusters and coordinates are computed on the exact positions. It can be combined with patterns to separate patterns differing only in non active variables.}
   \item{seed}{random seed for reproducible k-means clustering, row sampling and jitter. The RNG state of the session is restored on exit. Use NULL to avoid setting a seed.}
+  \item{clusterOn}{what k-means clusters on: "factors" (default) uses the two plotted MCA/PCA coordinates, so groups match the visual layout. "variables" uses the active variables instead (their dichotomized indicators for mca, their standardized values for pca), so groups reflect the full active variable space rather than only the two displayed dimensions.}
   \item{...}{Any \link{netCoin} argument.}
 }
 \references{
@@ -39,5 +41,11 @@ Modesto Escobar, Department of Sociology and Communication, University of Salama
 frame<-data.frame(Gender=c(rep("Man",3),rep("Woman",3)),
                   Opinion=c("Yes","Yes","No","No","No","Yes"))
 surScat(frame) # network object
+
+# PCA example: quantitative active variables, clustered on those variables
+# (not on the two plotted PCA axes), shaped by a non-active variable
+data(iris)
+surScat(iris, active=c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width"),
+        shape="Species", nclusters=2:3, clusterOn="variables")
 }
 
