@@ -243,8 +243,14 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 
 ## surScat ----
 # surScat is a wrapper to build a netCoin object from an original non-dichotomized data.frame and see frequencies.
-surScat <- function(data, variables=names(data), active=variables, type= c("mca", "pca"), nclusters=2, maxN=2000, weight=NULL, patterns=FALSE, jitter=0, seed=2020, clusterOn=c("factors", "variables"), ...) {
+surScat <- function(data, variables=names(data), active=variables, weight=NULL, patterns=FALSE, jitter=0,
+                     type=c("mca", "pca"), nclusters=2, clusterOn=c("factors", "variables"), nfactors=2, critFactors=0,
+                     seed=2020, maxN=2000, ...) {
   clusterOn <- match.arg(clusterOn)
+  if(nfactors<1) stop("nfactors must be at least 1")
+  nExtract <- max(nfactors,2) # the scattergram always needs two dimensions, regardless of nfactors
+  if(clusterOn=="variables" && (!missing(nfactors) || !missing(critFactors)))
+    warning("nfactors and critFactors are ignored when clusterOn=\"variables\"")
   if(!is.null(seed)) {
     if(exists(".Random.seed", envir = globalenv())) {
       oldseed <- get(".Random.seed", envir = globalenv())
@@ -281,7 +287,7 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
     B <- as.data.frame(droplevels(as_factor(D)))
     b <- B[,active, drop=FALSE]
     m <- as.matrix(dichotomize(b,variables=names(b), sort=F, add=F, nas=NULL))
-    cc <- layoutMca(m, rows=T, weight=weight)
+    ff <- layoutMca(m, nfactors=nExtract, rows=T, weight=weight)
     vm <- m # dichotomized active variables, for clustering on clusterOn="variables"
   }
   else {
@@ -296,17 +302,26 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
     B[, active]  <- b
     if(is.null(weight)) {
       m  <- prcomp(b, center = TRUE, scale. = TRUE)
-      cc <- m$x[,1:2]
+      ff <- m$x[,1:nExtract, drop=FALSE]
+      attr(ff,"eigenvalues") <- m$sdev^2 # full spectrum, for factor-selection criteria
       vm <- scale(as.matrix(b)) # standardized active variables, for clustering on clusterOn="variables"
     } else { # weighted PCA: weighted standardization and eigenvectors of the weighted correlation matrix
       w <- weight/sum(weight)
       ctr <- sweep(as.matrix(b), 2, colSums(as.matrix(b)*w))
       std <- sweep(ctr, 2, sqrt(colSums(ctr^2*w)), "/")
-      cc <- (std %*% eigen(corr(b, weight=weight), symmetric=TRUE)$vectors)[,1:2]
+      eigres <- eigen(corr(b, weight=weight), symmetric=TRUE)
+      ff <- (std %*% eigres$vectors)[,1:nExtract, drop=FALSE]
+      attr(ff,"eigenvalues") <- eigres$values # full spectrum, for factor-selection criteria
       vm <- std
     }
   }
-  cm <- if(clusterOn=="variables") vm else cc
+  # factors used for clustering: those among the first nfactors whose eigenvalue exceeds
+  # critFactors times the mean eigenvalue of the full spectrum (generalizes Kaiser's rule to MCA)
+  eig <- attr(ff, "eigenvalues")
+  nUse <- max(1L, sum(eig[seq_len(nfactors)] > critFactors*mean(eig)))
+  fm <- ff[, seq_len(nUse), drop=FALSE]
+  cc <- ff[, 1:2, drop=FALSE] # the scattergram itself is always two-dimensional
+  cm <- if(clusterOn=="variables") vm else fm
   arguments <- list(...)
   if(patterns) {
     vars <- names(B)
@@ -325,7 +340,8 @@ surScat <- function(data, variables=names(data), active=variables, type= c("mca"
   for(i in nclusters) {
     G <- stats::kmeans(cm, centers=i)
     g <- paste0(groupsWord,"(",sprintf(paste0("%0",nchar(max(nclusters)),"d"),i),")")
-    B[[g]] <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),G$cluster))
+    labels <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),seq_len(i)))
+    B[[g]] <- factor(labels[G$cluster], levels=labels, ordered=TRUE)
   }
   arguments$name <- nameByLanguage(NULL,arguments$language,NULL)
   if(is.character(rownames(B)))  B[[arguments$name]] <- rownames(B)
@@ -406,8 +422,9 @@ layoutMca<-function(matrix, nfactors=2, rows=FALSE, weight=NULL){ # Corresponden
   CC$standard.coordinates.columns = sweep(SVD$v, 1, sqrt(column.masses), "/")
   CC$principal.coordinates.columns = sweep(CC$standard.coordinates.columns, 2, SVD$d, "*")
   CC <- lapply(CC, function(X){X<-X[,2:(nfactors+1)];colnames(X) <- paste0("F",1:nfactors); return(X)})
-  if(rows) return(CC$principal.coordinates.rows)
-  else return(CC$principal.coordinates.columns)
+  out <- if(rows) CC$principal.coordinates.rows else CC$principal.coordinates.columns
+  attr(out, "eigenvalues") <- SVD$d[-1]^2 # full non-trivial spectrum (drops the null 1st dimension), for factor-selection criteria
+  return(out)
 }
 
 dicho<-function(input,variables,value,newlabel=TRUE) {
