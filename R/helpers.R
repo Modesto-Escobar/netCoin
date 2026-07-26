@@ -21,6 +21,9 @@ names(groupsList) <- languages
 casesList <- c('Cases','Casos','Casos')
 names(casesList) <- languages
 
+meanList <- c('mean','media','mitjana')
+names(meanList) <- languages
+
 ## allnet, coin, layout, netcoin-core, netcorr, path, regression, surcoin
 getByLanguage <- function(varlist,language){
   if(!is.null(language) && language[1] %in% names(varlist))
