@@ -156,14 +156,14 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     # Create mapping from old cluster number to new (1, 2, 3, ...)
     renumber <- seq_len(n_clusters)
     names(renumber) <- unique_cl_sorted
-    # Apply mapping to cl and clusterDisplay
-    cl <- as.character(renumber[match(cl, unique_cl_sorted)])
+    # Apply mapping to cl and clusterDisplay (access by name, not by index)
+    cl <- as.character(renumber[cl])
     if(!is.null(clusterDisplay)) {
-      # Map display values by replacing the modal cluster with its new number
+      # Map display values by replacing each cluster value with its new number
       clusterDisplay_list <- strsplit(clusterDisplay, "\\|")
       clusterDisplay <- sapply(clusterDisplay_list, function(clusters_in_pattern) {
-        # Remap each cluster value to new numbering
-        remapped <- renumber[match(clusters_in_pattern, unique_cl_sorted)]
+        # Remap each cluster value to new numbering (access by name)
+        remapped <- renumber[clusters_in_pattern]
         paste(remapped, collapse="|")
       })
     }
