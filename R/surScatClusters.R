@@ -170,12 +170,14 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     unique_cl <- as.character(seq_len(n_clusters))
   }
 
-  # Create ordered factor with "Group: N" labels
-  labels <- paste0("Group", ": ", sprintf(paste0("%0", nchar(n_clusters), "d"), seq_len(n_clusters)))
-
   # Use display values (with multiple clusters) if available, otherwise use cl values
   cl_values <- if(!is.null(clusterDisplay)) clusterDisplay else cl
-  cl_factor <- factor(cl_values, levels=unique(cl_values), labels=labels[seq_along(unique(cl_values))], ordered=TRUE)
+  unique_cl_values <- unique(cl_values)
+  n_final <- length(unique_cl_values)
+
+  # Create ordered factor with "Group: N" labels based on actual unique values
+  labels <- paste0("Group", ": ", sprintf(paste0("%0", nchar(n_final), "d"), seq_len(n_final)))
+  cl_factor <- factor(cl_values, levels=unique_cl_values, labels=labels, ordered=TRUE)
 
   # Add the new cluster column
   scatObj$nodes[[name]] <- cl_factor
