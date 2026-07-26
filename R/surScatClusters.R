@@ -1,32 +1,121 @@
+## extractClusters ----
+# Extract cluster assignments from various clustering objects
+# Supports: kmeans, poLCA, tidyLPA, hclust (via cutree), or direct vector/factor
+extractClusters <- function(x, sourceData=NULL) {
+  # If already a vector or factor, return as-is
+  if(is.vector(x) || is.factor(x)) {
+    return(as.vector(as.integer(as.factor(as.character(x)))))
+  }
+
+  # kmeans object
+  if(inherits(x, "kmeans")) {
+    return(as.vector(x$cluster))
+  }
+
+  # poLCA object
+  if(inherits(x, "poLCA")) {
+    if(!is.null(x$predclass)) return(as.vector(x$predclass))
+    stop("poLCA object must have predclass attribute")
+  }
+
+  # tidyLPA result
+  if(inherits(x, "tidyLPA")) {
+    data <- tidyLPA::get_data(x)
+    if(!is.null(data$Class)) return(as.vector(as.integer(data$Class)))
+    stop("tidyLPA object must have Class column in returned data")
+  }
+
+  # hclust result (should be cut first, but allow passing pre-cut vector)
+  if(inherits(x, "hclust")) {
+    stop("hclust object should be cut first with cutree(). Pass the result of cutree() instead.")
+  }
+
+  # data.frame with single column
+  if(is.data.frame(x)) {
+    if(ncol(x) == 1) return(as.vector(as.integer(as.factor(as.character(x[[1]])))))
+    stop("clusters data.frame must have exactly one column")
+  }
+
+  # Unknown type
+  stop("Don't know how to extract clusters from object of class ", paste(class(x), collapse=", "))
+}
+
+
+## validateClusterOrder ----
+# Validate that clusters are in the same order/subset as sourceData
+# Returns invisibly TRUE if valid, stops with error otherwise
+validateClusterOrder <- function(clusters, sourceData, nCases) {
+  if(is.null(sourceData)) return(invisible(TRUE))
+
+  if(!is.data.frame(sourceData)) {
+    stop("sourceData must be a data.frame")
+  }
+
+  if(nrow(sourceData) != nCases) {
+    stop("sourceData has ", nrow(sourceData), " rows but clusters expect ", nCases,
+         " cases. Make sure sourceData is the same data used to compute the clusters.")
+  }
+
+  invisible(TRUE)
+}
+
+
 ## addClusters ----
 # Add a cluster column to a netCoin object from surScat
-addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL) {
+# clusters: vector, factor, or clustering object (kmeans, poLCA, tidyLPA)
+# sourceData: optional data.frame for validation that clusters are in correct order
+addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, sourceData=NULL) {
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
 
   if(is.null(clusters))
     stop("clusters must be provided")
 
-  if(is.data.frame(clusters)) {
-    if(ncol(clusters) == 1) clusters <- clusters[[1]]
-    else stop("clusters data.frame must have exactly one column")
-  }
+  # Extract clusters from clustering object if needed
+  clusters <- extractClusters(clusters, sourceData)
 
-  clusters <- as.vector(clusters)
+  # Validate that clusters are in correct order if sourceData provided
+  validateClusterOrder(clusters, sourceData, length(clusters))
 
   # Auto-collapse clusters if they are case-level but object has pattern-level nodes
+  collapseReport <- NULL
   if(length(clusters) != nrow(scatObj$nodes)) {
     idx <- attr(scatObj, "caseToPattern")
     if(!is.null(idx) && length(clusters) == length(idx)) {
       # Collapse clusters to pattern level using mode (most frequent value per pattern)
-      clusters <- vapply(split(seq_along(idx), idx), function(i) {
-        vals <- as.character(clusters[i])
+      groups <- split(seq_along(idx), idx)
+      collapsedClust <- character(length(groups))
+      conflicts <- data.frame(pattern=integer(), nCases=integer(), clusters=character(), stringsAsFactors=FALSE)
+
+      for(i in seq_along(groups)) {
+        casesInPattern <- groups[[i]]
+        vals <- as.character(clusters[casesInPattern])
         ux <- unique(vals)
-        if(length(ux) == 1) return(ux[1])
-        # Find most frequent value; ties broken alphabetically
-        freq <- table(vals)
-        ux[which.max(freq)]
-      }, character(1))
+        if(length(ux) == 1) {
+          collapsedClust[i] <- ux[1]
+        } else {
+          # Multiple cluster values in one pattern: record conflict
+          freq <- table(vals)
+          chosen <- ux[which.max(freq)]
+          collapsedClust[i] <- chosen
+          conflicts <- rbind(conflicts, data.frame(
+            pattern=i,
+            nCases=length(casesInPattern),
+            clusters=paste(sort(ux), collapse="|"),
+            stringsAsFactors=FALSE
+          ))
+        }
+      }
+
+      collapseReport <- list(
+        nPatterns = length(groups),
+        nCases = length(clusters),
+        nConflicts = nrow(conflicts),
+        conflictRate = nrow(conflicts) / length(groups),
+        conflicts = conflicts
+      )
+
+      clusters <- collapsedClust
     } else {
       stop(paste0("clusters has length ", length(clusters), " but scatObj has ",
                   nrow(scatObj$nodes), " nodes. If clusters are case-level and scatObj has ",
@@ -65,25 +154,41 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL) {
   # Add the new cluster column
   scatObj$nodes[[name]] <- cl_factor
 
+  # Store collapse report if applicable
+  if(!is.null(collapseReport)) {
+    attr(scatObj, paste0("collapse_", name)) <- collapseReport
+  }
+
   return(scatObj)
 }
 
 
 ## replaceClusters ----
 # Replace cluster columns in a netCoin object from surScat
-replaceClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL) {
+# Removes all existing cluster columns and adds the new one
+replaceClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, sourceData=NULL) {
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
 
-  # Remove existing cluster columns (those starting with "Groups")
-  groupCols <- grep("^Groups", names(scatObj$nodes), value=TRUE)
-  scatObj$nodes[groupCols] <- NULL
+  # Find and remove existing cluster columns
+  # Look for column names that look like clustering results (e.g., "Groups(2)", "LCA(3)", etc.)
+  # Pattern: word, opening paren, number, closing paren - or just start with "Group"
+  clusterPatterns <- c("^Groups?\\([0-9]", "^[A-Za-z]+\\([0-9]", "^Groups?:")
+  clusterCols <- character(0)
+  for(pat in clusterPatterns) {
+    clusterCols <- c(clusterCols, grep(pat, names(scatObj$nodes), value=TRUE))
+  }
+  clusterCols <- unique(clusterCols)
+
+  if(length(clusterCols) > 0) {
+    scatObj$nodes[clusterCols] <- NULL
+  }
 
   # If name not specified, try to reuse the first removed column name
-  if(is.null(name) && length(groupCols) > 0) {
-    name <- groupCols[1]
+  if(is.null(name) && length(clusterCols) > 0) {
+    name <- clusterCols[1]
   }
 
   # Use addClusters for the rest
-  addClusters(scatObj, clusters, name=name, sort=sort, weight=weight)
+  addClusters(scatObj, clusters, name=name, sort=sort, weight=weight, sourceData=sourceData)
 }

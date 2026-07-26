@@ -42,15 +42,14 @@ if (require("poLCA", quietly = TRUE)) {
                           nclass = 3,      # number of classes
                           verbose = FALSE)
 
-  # Step 4: Extract cluster assignments
-  lca_clusters <- lca_fit$predclass  # posterior class assignments
-
-  # Step 5: Add to surScat object
+  # Step 4: Add to surScat object
   # NOTE: If surScat was called with vPatterns, case-level clusters are automatically
-  # collapsed to pattern level using the mode
+  # collapsed to pattern level using the mode (see collapse report for details)
+  # Pass the poLCA object directly, addClusters extracts clusters automatically
   scatter_lca <- addClusters(scatter,
-                             clusters = lca_clusters,
-                             name = "LCA(3)")
+                             clusters = lca_fit,
+                             name = "LCA(3)",
+                             sourceData = df_lca)  # optional: validates cluster order
 
   # Now visualize: scatter_lca will show both k-means and LCA groupings
   # Use color = "LCA(3)" to color by LCA classes
@@ -97,13 +96,12 @@ if (require("tidyLPA", quietly = TRUE)) {
     models = 1,              # model specification (1 = Mclust VEE)
     verbose = FALSE)
 
-  # Step 3: Extract cluster assignments
-  lpa_clusters <- tidyLPA::get_data(lpa_results)$Class  # posterior assignments
-
-  # Step 4: Add to surScat object
+  # Step 3: Add to surScat object
+  # Pass the tidyLPA result directly, addClusters extracts clusters automatically
   scatter_lpa <- addClusters(scatter,
-                             clusters = lpa_clusters,
-                             name = "LPA(3)")
+                             clusters = lpa_results,
+                             name = "LPA(3)",
+                             sourceData = df_lpa)  # optional: validates cluster order
 
   # Now visualize both k-means and LPA groupings
 
@@ -143,9 +141,11 @@ hc <- hclust(dist(hc_data), method = "ward.D2")
 hc_clusters <- cutree(hc, k = 3)  # cut into 3 clusters
 
 # Step 3: Add to surScat object
+# Pass the cluster vector directly (hierarchical clustering needs manual cutree)
 scatter_hc <- addClusters(scatter,
                           clusters = hc_clusters,
-                          name = "Hierarchical(3)")
+                          name = "Hierarchical(3)",
+                          sourceData = df_hc)  # optional: validates cluster order
 
 
 # ============================================================================
@@ -160,20 +160,22 @@ scatter_base <- surScat(df_lpa,
                         nclusters = 2)
 
 # Add different clustering results sequentially
-scatter_kmeans2 <- addClusters(scatter_base, kmeans(df_lpa[,1:3], centers=2)$cluster, name="kmeans(2)")
-scatter_kmeans3 <- addClusters(scatter_base, kmeans(df_lpa[,1:3], centers=3)$cluster, name="kmeans(3)")
+# Pass kmeans objects directly; addClusters extracts clusters automatically
+kmeans_2 <- kmeans(df_lpa[,1:3], centers=2)
+scatter_kmeans2 <- addClusters(scatter_base, kmeans_2, name="kmeans(2)", sourceData=df_lpa)
+
+kmeans_3 <- kmeans(df_lpa[,1:3], centers=3)
+scatter_kmeans3 <- addClusters(scatter_base, kmeans_3, name="kmeans(3)", sourceData=df_lpa)
 
 # If you have LPA installed:
 if (require("tidyLPA", quietly = TRUE)) {
   lpa_2 <- tidyLPA::estimate_profiles(df_lpa[, c("score1", "score2", "score3")],
                                       n_profiles = 2, verbose = FALSE)
-  lpa_clusters_2 <- tidyLPA::get_data(lpa_2)$Class
-  scatter_lpa2 <- addClusters(scatter_base, lpa_clusters_2, name="LPA(2)")
+  scatter_lpa2 <- addClusters(scatter_base, lpa_2, name="LPA(2)", sourceData=df_lpa)
 
   lpa_3 <- tidyLPA::estimate_profiles(df_lpa[, c("score1", "score2", "score3")],
                                       n_profiles = 3, verbose = FALSE)
-  lpa_clusters_3 <- tidyLPA::get_data(lpa_3)$Class
-  scatter_lpa3 <- addClusters(scatter_base, lpa_clusters_3, name="LPA(3)")
+  scatter_lpa3 <- addClusters(scatter_base, lpa_3, name="LPA(3)", sourceData=df_lpa)
 
   # Now you can compare all methods visually by switching the color attribute
 }
@@ -182,19 +184,36 @@ if (require("tidyLPA", quietly = TRUE)) {
 # ============================================================================
 # Useful tips:
 # ============================================================================
-# 1. If surScat was called with vPatterns, case-level clusters are automatically
-#    collapsed to pattern level. No manual collapsing needed!
+# 1. Pass clustering objects directly to addClusters()
+#    addClusters() automatically extracts clusters from:
+#    - kmeans objects (extracts $cluster)
+#    - poLCA objects (extracts $predclass)
+#    - tidyLPA results (extracts Class from get_data())
+#    - vectors/factors (passed as-is)
+#
+#    scatter_lca <- addClusters(scatter, lca_fit, name="LCA(3)")  # poLCA object
+#    scatter_km <- addClusters(scatter, kmeans_result, name="kmeans(3)")  # kmeans object
+#
+# 2. Validate cluster order with sourceData parameter
+#    Pass the original data frame to validate that clusters are in the correct order:
+#    scatter <- addClusters(scatter, clusters, sourceData=df)
+#    This checks that the number of rows and order match, preventing silent errors.
+#
+# 3. If surScat was called with vPatterns, case-level clusters are automatically
+#    collapsed to pattern level. Check the collapse report for details:
 #    scatter <- surScat(df, vPatterns=c("var1", "var2"))
-#    scatter_lca <- addClusters(scatter, case_level_lca_clusters)  # auto-collapsed
+#    scatter <- addClusters(scatter, lca_fit)  # auto-collapsed
+#    report <- attr(scatter, "collapse_LCA(3)")  # access the collapse statistics
 #
-# 2. If your clustering result is soft (probabilities), convert to hard assignments:
+# 4. Use replaceClusters() to replace all existing cluster columns:
+#    scatter <- replaceClusters(scatter, new_clusters, name="NewMethod")
+#
+# 5. If your clustering result is soft (probabilities), convert to hard assignments first:
 #    clusters <- apply(posterior_probs, 1, which.max)
+#    scatter <- addClusters(scatter, clusters)
 #
-# 3. Use replaceClusters() if you want to replace the k-means result entirely:
-#    scatter <- replaceClusters(scatter, my_clusters, name="MyMethod")
-#
-# 4. Use weight parameter if your clustering accounts for case weights:
+# 6. Use weight parameter if your clustering accounts for case weights:
 #    scatter <- addClusters(scatter, clusters, weight = my_weights)
 #
-# 5. Set sort=FALSE to keep the original cluster numbering from your external method:
+# 7. Set sort=FALSE to keep the original cluster numbering from your external method:
 #    scatter <- addClusters(scatter, clusters, sort=FALSE)
