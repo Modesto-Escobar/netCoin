@@ -153,19 +153,29 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     # Renumber clusters based on sorted order
     order_idx <- order(mu)
     unique_cl_sorted <- unique_cl[order_idx]
-    # Create mapping from old cluster number to new (1, 2, 3, ...)
+    # Create mapping: old cluster value → new number
     renumber <- seq_len(n_clusters)
     names(renumber) <- unique_cl_sorted
-    # Apply mapping to cl and clusterDisplay (access by name, not by index)
-    cl <- as.character(renumber[cl])
+
+    # Map cl values: replace old values with new numbering
+    cl_new <- rep(NA_character_, length(cl))
+    for(i in seq_len(n_clusters)) {
+      cl_new[cl == unique_cl_sorted[i]] <- as.character(i)
+    }
+    cl <- cl_new
+
     if(!is.null(clusterDisplay)) {
       # Map display values by replacing each cluster value with its new number
-      clusterDisplay_list <- strsplit(clusterDisplay, "\\|")
-      clusterDisplay <- sapply(clusterDisplay_list, function(clusters_in_pattern) {
-        # Remap each cluster value to new numbering (access by name)
-        remapped <- renumber[clusters_in_pattern]
-        paste(remapped, collapse="|")
-      })
+      clusterDisplay_new <- character(length(clusterDisplay))
+      for(j in seq_along(clusterDisplay)) {
+        vals <- strsplit(clusterDisplay[j], "\\|")[[1]]
+        new_vals <- character(length(vals))
+        for(i in seq_len(n_clusters)) {
+          new_vals[vals == unique_cl_sorted[i]] <- as.character(i)
+        }
+        clusterDisplay_new[j] <- paste(new_vals, collapse="|")
+      }
+      clusterDisplay <- clusterDisplay_new
     }
     unique_cl <- as.character(seq_len(n_clusters))
   }
