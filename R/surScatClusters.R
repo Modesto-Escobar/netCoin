@@ -149,17 +149,31 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
 
   # Sort clusters if requested (by mean coordinate on first layout axis)
   if(sort && !is.null(scatObj$layout) && ncol(scatObj$layout) > 0) {
+    # For sorting, use ALL cluster values (including non-modal), but compute mean only for modals
+    # Non-modal clusters inherit the mean of their pattern's modal cluster
     cf <- factor(cl, levels=unique_cl)
     layout_first <- scatObj$layout[,1]
     if(is.null(weight)) {
-      mu <- tapply(layout_first, cf, mean)
+      mu_modal <- tapply(layout_first, cf, mean)
     } else {
       if(length(weight) != length(cl))
         stop("weight must have same length as clusters")
-      mu <- tapply(seq_along(cl), cf, function(k) weighted.mean(layout_first[k], weight[k]))
+      mu_modal <- tapply(seq_along(cl), cf, function(k) weighted.mean(layout_first[k], weight[k]))
     }
+
+    # Assign modal values' means to all cluster values (for sorting purposes)
+    mu_all <- numeric(length(all_cluster_values))
+    names(mu_all) <- all_cluster_values
+    for(i in seq_along(unique_cl)) {
+      # Find all patterns with this modal value
+      patterns_with_modal <- which(cl == unique_cl[i])
+      if(length(patterns_with_modal) > 0) {
+        mu_all[unique_cl[i]] <- mu_modal[unique_cl[i]]
+      }
+    }
+
     # Renumber clusters based on sorted order (use all_cluster_values so all values have a mapping)
-    order_idx <- order(mu[as.character(all_cluster_values)])
+    order_idx <- order(mu_all[as.character(all_cluster_values)])
     all_cluster_values_sorted <- all_cluster_values[order_idx]
 
     # Map cl values: replace old values with new numbering
