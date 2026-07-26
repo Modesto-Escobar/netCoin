@@ -71,6 +71,10 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
   if(is.null(clusters))
     stop("clusters must be provided")
 
+  # Extract language setting for labels
+  language <- scatObj$options$language
+  if(is.null(language)) language <- "en"
+
   # Extract clusters from clustering object if needed
   clusters <- extractClusters(clusters, sourceData)
 
@@ -98,8 +102,10 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
 
         # Modal (most frequent) cluster for sorting
         collapsedClust[i] <- orderedClust[1]
-        # Display all clusters ordered by frequency, joined by "|"
-        clusterDisplay[i] <- paste(as.character(orderedClust), collapse="|")
+        # Display all clusters ordered by frequency with localized prefix
+        groupWord <- getByLanguage(groupList, language)
+        displayVals <- paste0(groupWord, ": ", orderedClust)
+        clusterDisplay[i] <- paste(displayVals, collapse="|")
 
         # Record if there were conflicts (multiple distinct clusters in this pattern)
         if(length(orderedClust) > 1) {
@@ -184,18 +190,28 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     cl <- cl_new
 
     if(!is.null(clusterDisplay)) {
-      # Map display values by replacing each cluster value with its new number
+      # Map display values: extract cluster numbers, remap them, and reconstruct with prefix
       clusterDisplay_new <- character(length(clusterDisplay))
+      groupWord <- getByLanguage(groupList, language)
+
       for(j in seq_along(clusterDisplay)) {
-        vals <- strsplit(clusterDisplay[j], "\\|")[[1]]
-        new_vals <- character(length(vals))
-        for(k in seq_along(vals)) {
-          idx_in_sorted <- which(all_cluster_values_sorted == vals[k])
+        # Extract just the numbers from "Group: 1|Group: 2|Group: 3"
+        display_parts <- strsplit(clusterDisplay[j], "\\|")[[1]]
+        # Remove the "Group: " prefix to get just the numbers
+        cluster_nums <- sub(paste0("^", groupWord, ": "), "", display_parts)
+
+        # Remap the numbers based on sorting
+        new_nums <- character(length(cluster_nums))
+        for(k in seq_along(cluster_nums)) {
+          idx_in_sorted <- which(all_cluster_values_sorted == cluster_nums[k])
           if(length(idx_in_sorted) > 0) {
-            new_vals[k] <- as.character(idx_in_sorted)
+            new_nums[k] <- as.character(idx_in_sorted)
           }
         }
-        clusterDisplay_new[j] <- paste(new_vals, collapse="|")
+
+        # Reconstruct with prefix
+        new_display <- paste0(groupWord, ": ", new_nums)
+        clusterDisplay_new[j] <- paste(new_display, collapse="|")
       }
       clusterDisplay <- clusterDisplay_new
     }
