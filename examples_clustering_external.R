@@ -44,8 +44,9 @@ if (require("poLCA", quietly = TRUE)) {
 
   # Step 4: Add to surScat object
   # NOTE: If surScat was called with vPatterns, case-level clusters are automatically
-  # collapsed to pattern level using the mode (see collapse report for details)
-  # Pass the poLCA object directly, addClusters extracts clusters automatically
+  # collapsed to pattern level. All clusters within each pattern are shown, ordered by frequency.
+  # For example: a pattern with 5 cases in clusters [1,1,2,1,2] shows "1|2" (1 appears 3x, 2 appears 2x)
+  # See collapse report for conflict statistics.
   scatter_lca <- addClusters(scatter,
                              clusters = lca_fit,
                              name = "LCA(3)",

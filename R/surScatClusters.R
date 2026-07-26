@@ -90,18 +90,17 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
       for(i in seq_along(groups)) {
         casesInPattern <- groups[[i]]
         vals <- as.character(clusters[casesInPattern])
-        ux <- unique(vals)
-        if(length(ux) == 1) {
-          collapsedClust[i] <- ux[1]
-        } else {
-          # Multiple cluster values in one pattern: record conflict
-          freq <- table(vals)
-          chosen <- ux[which.max(freq)]
-          collapsedClust[i] <- chosen
+        freq <- table(vals)
+        # Order clusters by frequency (descending), ties broken alphabetically
+        orderedClust <- names(freq)[order(-freq, names(freq))]
+        collapsedClust[i] <- paste(as.character(orderedClust), collapse="|")
+
+        # Record if there were conflicts (multiple distinct clusters in this pattern)
+        if(length(orderedClust) > 1) {
           conflicts <- rbind(conflicts, data.frame(
             pattern=i,
             nCases=length(casesInPattern),
-            clusters=paste(sort(ux), collapse="|"),
+            clusters=paste(as.character(orderedClust), collapse="|"),
             stringsAsFactors=FALSE
           ))
         }
