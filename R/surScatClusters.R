@@ -102,10 +102,8 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
 
         # Modal (most frequent) cluster for sorting
         collapsedClust[i] <- orderedClust[1]
-        # Display all clusters ordered by frequency with localized prefix
-        groupWord <- getByLanguage(groupList, language)
-        displayVals <- paste0(groupWord, ": ", orderedClust)
-        clusterDisplay[i] <- paste(displayVals, collapse="|")
+        # Store cluster values without prefix (will add prefix as labels later)
+        clusterDisplay[i] <- paste(as.character(orderedClust), collapse="|")
 
         # Record if there were conflicts (multiple distinct clusters in this pattern)
         if(length(orderedClust) > 1) {
@@ -190,15 +188,12 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     cl <- cl_new
 
     if(!is.null(clusterDisplay)) {
-      # Map display values: extract cluster numbers, remap them, and reconstruct with prefix
+      # Map display values: extract cluster numbers and remap them (without prefix)
       clusterDisplay_new <- character(length(clusterDisplay))
-      groupWord <- getByLanguage(groupList, language)
 
       for(j in seq_along(clusterDisplay)) {
-        # Extract just the numbers from "Group: 1|Group: 2|Group: 3"
-        display_parts <- strsplit(clusterDisplay[j], "\\|")[[1]]
-        # Remove the "Group: " prefix to get just the numbers
-        cluster_nums <- sub(paste0("^", groupWord, ": "), "", display_parts)
+        # Split the cluster values (they are just numbers without prefix: "1|2|3")
+        cluster_nums <- strsplit(clusterDisplay[j], "\\|")[[1]]
 
         # Remap the numbers based on sorting
         new_nums <- character(length(cluster_nums))
@@ -209,9 +204,8 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
           }
         }
 
-        # Reconstruct with prefix
-        new_display <- paste0(groupWord, ": ", new_nums)
-        clusterDisplay_new[j] <- paste(new_display, collapse="|")
+        # Reconstruct without prefix (will add prefix as labels later)
+        clusterDisplay_new[j] <- paste(new_nums, collapse="|")
       }
       clusterDisplay <- clusterDisplay_new
     }
@@ -222,10 +216,20 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
   # Use display values (with multiple clusters) if available, otherwise use cl values
   cl_values <- if(!is.null(clusterDisplay)) clusterDisplay else cl
 
-  # Create ordered factor with actual cluster values (no abstract labels)
-  # This shows the clusters directly, ordered by frequency within each pattern
+  # Create ordered factor with localized labels
+  # Values are cluster numbers (e.g., "1|2|3"), labels have localized prefix (e.g., "Group: 1|Group: 2|Group: 3")
   unique_cl_values <- unique(cl_values)
-  cl_factor <- factor(cl_values, levels=unique_cl_values, ordered=TRUE)
+  groupWord <- getByLanguage(groupList, language)
+
+  # Create labels by adding prefix to each cluster number
+  labels_with_prefix <- sapply(unique_cl_values, function(val) {
+    # Split by "|", add prefix to each, rejoin
+    parts <- strsplit(val, "\\|")[[1]]
+    labeled_parts <- paste0(groupWord, ": ", parts)
+    paste(labeled_parts, collapse="|")
+  }, USE.NAMES=FALSE)
+
+  cl_factor <- factor(cl_values, levels=unique_cl_values, labels=labels_with_prefix, ordered=TRUE)
 
   # Add the new cluster column
   scatObj$nodes[[name]] <- cl_factor
