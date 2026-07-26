@@ -428,8 +428,18 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     }
     newB <- B[!duplicated(idx), , drop=FALSE] # one row per pattern; overwritten below except for vPatterns
     for(v in setdiff(names(B), vPatterns)) {
-      if(v %in% gCols) # a collapsed pattern can span several k-means groups: keep all of them
-        newB[[v]] <- vapply(groups, function(i) paste(as.character(sort(unique(B[[v]][i]))), collapse="|"), character(1))
+      if(v %in% gCols) { # a collapsed pattern can span several k-means groups: keep all of them
+        # order groups by their modal (most frequent) category within each pattern
+        orderedGroups <- vapply(groups, function(i) {
+          gvals <- B[[v]][i]
+          # count frequency of each group within this pattern
+          freq <- table(gvals)
+          # order by frequency (descending), ties broken alphabetically
+          ordered_unique <- names(freq)[order(-freq, names(freq))]
+          paste(as.character(ordered_unique), collapse="|")
+        }, character(1))
+        newB[[v]] <- orderedGroups
+      }
       else if(is.numeric(data[[v]]))
         newB[[v]] <- vapply(groups, function(i) wmean(D[[v]][i], weight[i]), numeric(1))
       else
