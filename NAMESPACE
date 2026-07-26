@@ -1,5 +1,7 @@
 export(surCoin)
 export(surScat)
+export(addClusters)
+export(replaceClusters)
 export(allNet)
 export(netCoin)
 export(netCorr)
