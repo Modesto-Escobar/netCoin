@@ -139,6 +139,14 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
   unique_cl <- unique(cl)
   n_clusters <- length(unique_cl)
 
+  # If there's clusterDisplay (conflicts exist), get ALL unique values from it
+  all_cluster_values <- unique_cl
+  if(!is.null(clusterDisplay)) {
+    # Extract all unique cluster values that appear in display (including non-modal)
+    all_vals_in_display <- unique(unlist(strsplit(clusterDisplay, "\\|")))
+    all_cluster_values <- union(all_cluster_values, all_vals_in_display)
+  }
+
   # Sort clusters if requested (by mean coordinate on first layout axis)
   if(sort && !is.null(scatObj$layout) && ncol(scatObj$layout) > 0) {
     cf <- factor(cl, levels=unique_cl)
@@ -150,17 +158,14 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
         stop("weight must have same length as clusters")
       mu <- tapply(seq_along(cl), cf, function(k) weighted.mean(layout_first[k], weight[k]))
     }
-    # Renumber clusters based on sorted order
-    order_idx <- order(mu)
-    unique_cl_sorted <- unique_cl[order_idx]
-    # Create mapping: old cluster value → new number
-    renumber <- seq_len(n_clusters)
-    names(renumber) <- unique_cl_sorted
+    # Renumber clusters based on sorted order (use all_cluster_values so all values have a mapping)
+    order_idx <- order(mu[as.character(all_cluster_values)])
+    all_cluster_values_sorted <- all_cluster_values[order_idx]
 
     # Map cl values: replace old values with new numbering
     cl_new <- rep(NA_character_, length(cl))
-    for(i in seq_len(n_clusters)) {
-      cl_new[cl == unique_cl_sorted[i]] <- as.character(i)
+    for(i in seq_along(all_cluster_values_sorted)) {
+      cl_new[cl == all_cluster_values_sorted[i]] <- as.character(i)
     }
     cl <- cl_new
 
@@ -170,13 +175,17 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
       for(j in seq_along(clusterDisplay)) {
         vals <- strsplit(clusterDisplay[j], "\\|")[[1]]
         new_vals <- character(length(vals))
-        for(i in seq_len(n_clusters)) {
-          new_vals[vals == unique_cl_sorted[i]] <- as.character(i)
+        for(k in seq_along(vals)) {
+          idx_in_sorted <- which(all_cluster_values_sorted == vals[k])
+          if(length(idx_in_sorted) > 0) {
+            new_vals[k] <- as.character(idx_in_sorted)
+          }
         }
         clusterDisplay_new[j] <- paste(new_vals, collapse="|")
       }
       clusterDisplay <- clusterDisplay_new
     }
+    n_clusters <- length(all_cluster_values_sorted)
     unique_cl <- as.character(seq_len(n_clusters))
   }
 
