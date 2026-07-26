@@ -416,6 +416,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     B[[g]] <- factor(labels[cl], levels=labels, ordered=TRUE)
     gCols <- c(gCols, g)
   }
+  idx <- NULL # will hold case-to-pattern mapping if patterns=TRUE
   if(patterns) { # collapse cases sharing a vPatterns response pattern into a single node
     key <- do.call(paste, c(D[, vPatterns, drop=FALSE], sep="\r"))
     idx <- match(key, key[!duplicated(key)]) # 1..N group id, in order of first appearance
@@ -547,8 +548,11 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   arguments$statistics <- TRUE
   arguments$degreeFilter <- NULL
   if(is.null(arguments$label)) arguments$label <- ""
-  if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)  
-  return(do.call(netCoin, arguments))
+  if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)
+  xnc <- do.call(netCoin, arguments)
+  # Store case-to-pattern mapping if patterns were collapsed, for later use by addClusters
+  if(!is.null(idx)) attr(xnc, "caseToPattern") <- idx
+  return(xnc)
 }
 
 corr <- function (a, b = a, weight = NULL )

@@ -14,9 +14,25 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL) {
 
   clusters <- as.vector(clusters)
 
-  if(length(clusters) != nrow(scatObj$nodes))
-    stop(paste0("clusters has length ", length(clusters), " but scatObj has ",
-                nrow(scatObj$nodes), " nodes"))
+  # Auto-collapse clusters if they are case-level but object has pattern-level nodes
+  if(length(clusters) != nrow(scatObj$nodes)) {
+    idx <- attr(scatObj, "caseToPattern")
+    if(!is.null(idx) && length(clusters) == length(idx)) {
+      # Collapse clusters to pattern level using mode (most frequent value per pattern)
+      clusters <- vapply(split(seq_along(idx), idx), function(i) {
+        vals <- as.character(clusters[i])
+        ux <- unique(vals)
+        if(length(ux) == 1) return(ux[1])
+        # Find most frequent value; ties broken alphabetically
+        freq <- table(vals)
+        ux[which.max(freq)]
+      }, character(1))
+    } else {
+      stop(paste0("clusters has length ", length(clusters), " but scatObj has ",
+                  nrow(scatObj$nodes), " nodes. If clusters are case-level and scatObj has ",
+                  "pattern-level nodes, surScat must have been called with vPatterns."))
+    }
+  }
 
   # Default name
   if(is.null(name)) {
@@ -59,8 +75,8 @@ replaceClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
 
-  # Remove existing cluster columns
-  groupCols <- grep("^Group", names(scatObj$nodes), value=TRUE)
+  # Remove existing cluster columns (those starting with "Groups")
+  groupCols <- grep("^Groups", names(scatObj$nodes), value=TRUE)
   scatObj$nodes[groupCols] <- NULL
 
   # If name not specified, try to reuse the first removed column name
