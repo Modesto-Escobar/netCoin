@@ -442,8 +442,20 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
       }
       else if(is.numeric(data[[v]]))
         newB[[v]] <- vapply(groups, function(i) wmean(D[[v]][i], weight[i]), numeric(1))
-      else
-        newB[[v]] <- vapply(groups, function(i) wmode(B[[v]][i], weight[i]), character(1))
+      else { # nominal variable: show all categories ordered by frequency
+        newB[[v]] <- vapply(groups, function(i) {
+          catvals <- B[[v]][i]
+          if(is.null(weight)) {
+            freq <- table(catvals)
+          } else {
+            w <- weight[i]
+            freq <- tapply(w, catvals, sum)
+          }
+          # order by frequency (descending), ties broken alphabetically
+          ordered_cats <- names(freq)[order(-freq, names(freq))]
+          paste(as.character(ordered_cats), collapse="|")
+        }, character(1))
+      }
     }
     B <- newB
     ccnames <- colnames(cc)
