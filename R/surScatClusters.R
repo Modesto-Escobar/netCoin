@@ -79,12 +79,14 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
 
   # Auto-collapse clusters if they are case-level but object has pattern-level nodes
   collapseReport <- NULL
+  clusterDisplay <- NULL  # Will hold display values (e.g., "1|2") for visualization
   if(length(clusters) != nrow(scatObj$nodes)) {
     idx <- attr(scatObj, "caseToPattern")
     if(!is.null(idx) && length(clusters) == length(idx)) {
       # Collapse clusters to pattern level using mode (most frequent value per pattern)
       groups <- split(seq_along(idx), idx)
-      collapsedClust <- character(length(groups))
+      collapsedClust <- character(length(groups))  # Modal cluster for sorting
+      clusterDisplay <- character(length(groups))  # Display value with all clusters
       conflicts <- data.frame(pattern=integer(), nCases=integer(), clusters=character(), stringsAsFactors=FALSE)
 
       for(i in seq_along(groups)) {
@@ -93,7 +95,11 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
         freq <- table(vals)
         # Order clusters by frequency (descending), ties broken alphabetically
         orderedClust <- names(freq)[order(-freq, names(freq))]
-        collapsedClust[i] <- paste(as.character(orderedClust), collapse="|")
+
+        # Modal (most frequent) cluster for sorting
+        collapsedClust[i] <- orderedClust[1]
+        # Display all clusters ordered by frequency, joined by "|"
+        clusterDisplay[i] <- paste(as.character(orderedClust), collapse="|")
 
         # Record if there were conflicts (multiple distinct clusters in this pattern)
         if(length(orderedClust) > 1) {
@@ -114,7 +120,8 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
         conflicts = conflicts
       )
 
-      clusters <- collapsedClust
+      clusters <- collapsedClust  # Use modal for sorting
+      clusterDisplay <- clusterDisplay  # Use display values later
     } else {
       stop(paste0("clusters has length ", length(clusters), " but scatObj has ",
                   nrow(scatObj$nodes), " nodes. If clusters are case-level and scatObj has ",
@@ -127,7 +134,7 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     name <- make.unique(c(names(scatObj$nodes), "clusters"))[length(names(scatObj$nodes))+1]
   }
 
-  # Get unique clusters
+  # Get unique clusters (use modal values for sorting if collapse happened)
   cl <- as.character(clusters)
   unique_cl <- unique(cl)
   n_clusters <- length(unique_cl)
@@ -143,12 +150,32 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
         stop("weight must have same length as clusters")
       mu <- tapply(seq_along(cl), cf, function(k) weighted.mean(layout_first[k], weight[k]))
     }
-    unique_cl <- unique_cl[order(mu)]
+    # Renumber clusters based on sorted order
+    order_idx <- order(mu)
+    unique_cl_sorted <- unique_cl[order_idx]
+    # Create mapping from old cluster number to new (1, 2, 3, ...)
+    renumber <- seq_len(n_clusters)
+    names(renumber) <- unique_cl_sorted
+    # Apply mapping to cl and clusterDisplay
+    cl <- as.character(renumber[match(cl, unique_cl_sorted)])
+    if(!is.null(clusterDisplay)) {
+      # Map display values by replacing the modal cluster with its new number
+      clusterDisplay_list <- strsplit(clusterDisplay, "\\|")
+      clusterDisplay <- sapply(clusterDisplay_list, function(clusters_in_pattern) {
+        # Remap each cluster value to new numbering
+        remapped <- renumber[match(clusters_in_pattern, unique_cl_sorted)]
+        paste(remapped, collapse="|")
+      })
+    }
+    unique_cl <- as.character(seq_len(n_clusters))
   }
 
   # Create ordered factor with "Group: N" labels
   labels <- paste0("Group", ": ", sprintf(paste0("%0", nchar(n_clusters), "d"), seq_len(n_clusters)))
-  cl_factor <- factor(cl, levels=unique_cl, labels=labels, ordered=TRUE)
+
+  # Use display values (with multiple clusters) if available, otherwise use cl values
+  cl_values <- if(!is.null(clusterDisplay)) clusterDisplay else cl
+  cl_factor <- factor(cl_values, levels=unique(cl_values), labels=labels[seq_along(unique(cl_values))], ordered=TRUE)
 
   # Add the new cluster column
   scatObj$nodes[[name]] <- cl_factor
