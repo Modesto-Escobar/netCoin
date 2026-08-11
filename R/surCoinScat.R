@@ -480,7 +480,9 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   else { # HTML profile of each case: where it stands on both axes, next to the mean of the group
     num2txt <- function(x) vapply(x, function(z) format(round(z,2), trim=TRUE), character(1))
     meanWord <- getByLanguage(meanList, arguments$language)
-    txt <- rep("", nrow(B))
+    positionWord <- getByLanguage(positionList, arguments$language)
+    txt <- paste0("<b>CLUSTER:</b><br/><b>", g, "</b>: ", as.integer(B[[g]]),
+                  "<br/><b>", positionWord, ":</b><br/>")
     for(j in 1:2) {
       ax <- if(j==1) xAxis else yAxis
       # a factorial axis is described by the coordinate that is plotted, whereas an observed
@@ -494,7 +496,6 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
       txt <- paste0(txt, "<b>", axisTitle(ax), "</b>: ", val,
                     " (", meanWord, ": ", num2txt(mu[as.integer(B[[g]])]), ")<br/>")
     }
-    txt <- paste0(txt, "<b>", g, "</b>: ", as.integer(B[[g]]))
     tName <- make.unique(c(names(B),"ntext"))[ncol(B)+1]
     B[[tName]] <- txt
     if(is.null(arguments$ntext)) arguments$ntext <- tName
