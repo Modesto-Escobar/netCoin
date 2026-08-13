@@ -244,12 +244,13 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 ## surScat ----
 # surScat is a wrapper to build a netCoin object from an original non-dichotomized data.frame and see frequencies.
 surScat <- function(data, variables=names(data), active=variables, weight=NULL, patterns=FALSE, vPatterns=variables, jitter=0,
-                     type=c("mca", "pca"), xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nclusters=2, clusterOn=c("factors", "variables"), nfactors=2, critFactors=0,
+                     type=c("mca", "pca"), xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nclusters=2, clusterOn=c("factors", "variables"), scaleClusters=NULL, nstart=25, nfactors=2, critFactors=0,
                      sortClusters=TRUE, columns=NULL, seed=2020, maxN=2000, ...) {
   statedvPatterns <- !missing(vPatterns) # kept, as vPatterns itself may be modified below
   if(statedvPatterns) patterns <- TRUE # stating vPatterns implies patterns=TRUE
   clusterOn <- match.arg(clusterOn)
   if(nfactors<1) stop("nfactors must be at least 1")
+  if(length(nstart)!=1 || is.na(nstart) || nstart<1) stop("nstart must be at least 1")
   force(active); force(vPatterns) # both default to variables, which the axis variables extend below
   # each plotted axis is either a factorial one (a number, or a name such as "F1" or "PC2") or an
   # observed variable of the data frame, optionally followed by a logical stating whether to
@@ -396,6 +397,20 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     if(sc && stats::sd(cc[,j])>0) cc[,j] <- (cc[,j]-mean(cc[,j]))/stats::sd(cc[,j])
   }
   cm <- if(clusterOn=="variables") vm else fm
+  # k-means weighs every column by its own spread, so a dominant first factor would cut the
+  # groups along it alone and they would read as bands on a plot whose axes are standardized.
+  # Standardizing the clustering space gives each axis the same say, as the picture does.
+  # Dichotomized indicators are the exception: standardizing them turns a "yes" in a category
+  # held by a proportion p into sqrt((1-p)/p) units, so the rare ones would take over the
+  # distances and the groups would single out the few cases holding them. Left raw, the squared
+  # distance between two cases is the number of categories they differ in.
+  if(is.null(scaleClusters))
+    scaleClusters <- !(clusterOn=="variables" && type=="mca")
+  if(scaleClusters) {
+    sdv <- apply(cm, 2, stats::sd)
+    sdv[sdv==0 | is.na(sdv)] <- 1 # a constant column carries no information: leave it be
+    cm <- sweep(sweep(cm, 2, colMeans(cm)), 2, sdv, "/")
+  }
   arguments <- list(...)
   # k-means always clusters case by case (never on already-collapsed patterns), so that a
   # pattern collapsed on a subset of variables (vPatterns) can still span several groups
@@ -403,13 +418,15 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   groupWord  <- getByLanguage(groupList,  arguments$language)
   gCols <- character(0) # names of the k-means group columns: concatenated, not averaged/moded, when collapsing patterns
   for(i in nclusters) {
-    G <- stats::kmeans(cm, centers=i)
+    # k-means only reaches a local optimum, the one its random start leads to, so it is run
+    # nstart times over and the best of those runs is kept
+    G <- stats::kmeans(cm, centers=i, nstart=nstart)
     cl <- G$cluster
     if(sortClusters) { # k-means numbers its clusters by chance, which makes the order of the
-      cf <- factor(cl, levels=seq_len(i)) # ordered factor below arbitrary: renumber them by
-      mu <- if(is.null(weight)) tapply(ff[,1], cf, mean) # their (weighted) mean on the first
-            else tapply(seq_along(cl), cf, function(k) weighted.mean(ff[k,1], weight[k])) # factor
-      cl <- match(cl, order(mu))
+      cf <- factor(cl, levels=seq_len(i)) # ordered factor below arbitrary: renumber them by their
+      mu <- if(is.null(weight)) tapply(cc[,1], cf, mean) # (weighted) mean on the horizontal axis
+            else tapply(seq_along(cl), cf, function(k) weighted.mean(cc[k,1], weight[k])) # as drawn,
+      cl <- match(cl, order(mu)) # which is the first factor unless xaxis states an observed variable
     }
     g <- paste0(groupsWord,"(",sprintf(paste0("%0",nchar(max(nclusters)),"d"),i),")")
     labels <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),seq_len(i)))
@@ -553,6 +570,9 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   xnc <- do.call(netCoin, arguments)
   # Store case-to-pattern mapping if patterns were collapsed, for later use by addClusters
   if(!is.null(idx)) attr(xnc, "caseToPattern") <- idx
+  # Record which columns hold clusterizations, so that replaceClusters knows what to
+  # remove without having to guess it from the column names
+  if(length(gCols)) attr(xnc, "clusterColumns") <- gCols
   return(xnc)
 }
 
