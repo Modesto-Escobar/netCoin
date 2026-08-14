@@ -21,7 +21,10 @@ are taken as planes.}
 own name, and 'name' becomes a prefix.}
 \item{which}{reduction to take when 'axes' is a 'looking4clusters' object, given as a name or
 an index. When it is left empty, every reduction held by the object is added as its own plane.}
-\item{weight}{a vector of weights, one per case, used when collapsing cases into patterns.}
+\item{weight}{a vector of weights, one per case, used when collapsing cases into patterns. NULL
+(default) takes the weights surScat was called with, so that the plane being added is collapsed
+just as the one already drawn, and collapses by the plain arithmetic mean when there were none.
+A vector of ones asks for the plain mean of a scattergram that does have weights.}
 }
 \details{
 A scattergram drawn by surScat holds a single pair of coordinates, the one stated by its
@@ -40,7 +43,16 @@ its list structure.
 The coordinates must come from the same data, in the same order, as the one given to surScat:
 only their length is checked, so keeping the order is up to the caller. Coordinates given case
 by case are collapsed into patterns, by their (weighted) mean, when surScat was called with
-\code{vPatterns}.
+\code{vPatterns}. The weights are the ones surScat itself collapsed with, which it keeps, unless
+\code{weight} states otherwise: a plane added to a weighted scattergram is therefore comparable
+with the one already drawn without having to repeat the weights.
+
+They must therefore hold one row per node, or one per case when the nodes are patterns. Anything
+else is an error, which is also what happens when surScat capped the nodes through its
+\code{maxN} argument: the node table then holds a random sample of the cases, or of the patterns,
+so coordinates computed on the whole data no longer line up with it and cannot be matched to it.
+Compute the coordinates on the node table of the object, which is that sample, or raise
+\code{maxN} so that every case is drawn.
 
 The labels of the axes belong to the graph and not to each plane, so they keep describing the
 plane that surScat drew. Naming the added planes after their axes keeps the reader oriented.

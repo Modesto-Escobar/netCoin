@@ -311,6 +311,11 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     keep <- keep & !is.na(weight)
     weight <- weight[keep]
   }
+  # weight is case by case only until the patterns are collapsed, where it becomes the sum
+  # of each pattern, so it is kept aside here, already down to the cases of the analysis and
+  # thus aligned with the case-to-pattern map. addAxes averages further coordinates with it,
+  # so that a plane it adds is collapsed just as the one drawn here.
+  caseWeight <- weight
   D <- data[keep, variables, drop=FALSE]
   if(type=="mca") {
     B <- as.data.frame(droplevels(as_factor(D)))
@@ -494,25 +499,38 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     B[[tName]] <- txt
     if(is.null(arguments$ntext)) arguments$ntext <- tName
   }
-  else { # HTML profile of each case: where it stands on both axes, next to the mean of the group
+  else { # HTML profile of each case: the centre of its group, and where the case stands from it
     num2txt <- function(x) vapply(x, function(z) format(round(z,2), trim=TRUE), character(1))
-    meanWord <- getByLanguage(meanList, arguments$language)
+    # the gap between a case and the centre of its group, signed so that the reader sees at a
+    # glance which side of the centre the case falls on
+    signed <- function(x) paste0(ifelse(round(x,2)>=0, "+", "-"), num2txt(abs(round(x,2))))
     positionWord <- getByLanguage(positionList, arguments$language)
-    txt <- paste0("<b>CLUSTER:</b><br/><b>", g, "</b>: ", as.integer(B[[g]]),
-                  "<br/><b>", positionWord, ":</b><br/>")
+    grp    <- as.integer(B[[g]])
+    centre <- "" # where the centre of the group sits on each axis, read under the cluster
+    place  <- "" # where the case itself sits, and how far from that centre
     for(j in 1:2) {
       ax <- if(j==1) xAxis else yAxis
       # a factorial axis is described by the coordinate that is plotted, whereas an observed
       # variable keeps its own units and its own labels, whatever was done to the axis
       num <- if(is.na(ax$variable)) cc[,j] else obs[[j]]
+      # an observed categorical axis is read by its labels, which cannot be told apart by a
+      # distance, so the gap is only spelled out where the value it applies to is a number
+      plain <- is.na(ax$variable) || is.numeric(B[[ax$variable]])
       val <- if(is.na(ax$variable)) num2txt(cc[,j])
-             else if(is.numeric(B[[ax$variable]])) num2txt(B[[ax$variable]])
+             else if(plain) num2txt(B[[ax$variable]])
              else as.character(B[[ax$variable]])
       mu <- if(is.null(weight)) tapply(num, B[[g]], mean)
             else tapply(seq_along(num), B[[g]], function(k) weighted.mean(num[k], weight[k]))
-      txt <- paste0(txt, "<b>", axisTitle(ax), "</b>: ", val,
-                    " (", meanWord, ": ", num2txt(mu[as.integer(B[[g]])]), ")<br/>")
+      mu <- mu[grp] # the centre of the group each case belongs to
+      centre <- paste0(centre, "<b>", axisTitle(ax), "</b>: ", num2txt(mu), "<br/>")
+      # the gap is taken between the figures as they are shown, rounded, so that a reader who
+      # subtracts the two of them arrives at the very number in the parentheses
+      place  <- paste0(place, "<b>", axisTitle(ax), "</b>: ", val,
+                       if(plain) paste0(" (", signed(round(num,2)-round(mu,2)), ")") else "",
+                       "<br/>")
     }
+    txt <- paste0("<b>CLUSTER:</b><br/><b>", g, "</b>: ", grp, "<br/>", centre,
+                  "<b>", positionWord, ":</b><br/>", place)
     tName <- make.unique(c(names(B),"ntext"))[ncol(B)+1]
     B[[tName]] <- txt
     if(is.null(arguments$ntext)) arguments$ntext <- tName
@@ -543,10 +561,15 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     ord <- c(columns, ord)
   }
   B <- B[, unique(c(intersect(ord, names(B)), setdiff(names(B), ord))), drop=FALSE]
-  if(nrow(B)>maxN) {
-    rcases <- sample(1:nrow(B), maxN)
-    B  <- B[rcases,]
-    cc <- cc[rcases,]
+  # A scattergram of too many nodes is capped by drawing a random subset of them. The subset
+  # is kept sorted, so that the nodes drawn stay in the order they had, and is recorded so
+  # that a caller can rebuild its own data out of the node table.
+  nAll <- nrow(B)
+  kept <- NULL
+  if(nAll>maxN) {
+    kept <- sort(sample.int(nAll, maxN))
+    B  <- B[kept, , drop=FALSE]
+    cc <- cc[kept, , drop=FALSE]
   }
   if(isTRUE(jitter)) jitter <- .02
   if(jitter>0) # visual spread only: clusters were computed on the exact coordinates
@@ -568,8 +591,21 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   if(is.null(arguments$label)) arguments$label <- ""
   if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)
   xnc <- do.call(netCoin, arguments)
-  # Store case-to-pattern mapping if patterns were collapsed, for later use by addClusters
-  if(!is.null(idx)) attr(xnc, "caseToPattern") <- idx
+  # Store case-to-pattern mapping if patterns were collapsed, for later use by addClusters.
+  # A sample of the patterns is no longer described by that mapping, so it is dropped when
+  # maxN has drawn one: addClusters and addAxes then report the mismatch instead of guessing
+  # which cases the nodes stand for.
+  if(!is.null(idx) && is.null(kept)) {
+    attr(xnc, "caseToPattern") <- idx
+    # the weights that collapsed the patterns, so that addAxes can collapse the same way
+    if(!is.null(caseWeight)) attr(xnc, "caseWeight") <- caseWeight
+  }
+  # Which nodes were drawn out of how many, so that the mismatch can be explained, and so
+  # that the caller can pull the sampled data out of the object to work on it
+  if(!is.null(kept)) {
+    attr(xnc, "sampledNodes") <- kept
+    attr(xnc, "sampledFrom")  <- nAll
+  }
   # Record which columns hold clusterizations, so that replaceClusters knows what to
   # remove without having to guess it from the column names
   if(length(gCols)) attr(xnc, "clusterColumns") <- gCols

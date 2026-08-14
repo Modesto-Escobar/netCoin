@@ -102,15 +102,13 @@ alignAxes <- function(scatObj, pair, weight=NULL, label="") {
   idx <- attr(scatObj, "caseToPattern")
   if(is.null(idx) || nrow(pair) != length(idx))
     stop(what, " has ", nrow(pair), " rows but scatObj has ", n,
-         " nodes. If the coordinates are case-level and scatObj has pattern-level nodes,",
-         " surScat must have been called with vPatterns.")
+         " nodes. Coordinates must hold one row per node, or one per case when the nodes",
+         " are patterns collapsed by vPatterns.", sampledNote(scatObj))
 
-  # surScat draws a sample of the patterns when there are more than maxN of them, and does
-  # not record which ones, so case-level coordinates can no longer be matched to the nodes
-  if(max(idx) != n)
-    stop(what, " is case-level, but the ", max(idx), " patterns of scatObj were subsampled",
-         " down to ", n, " nodes by maxN. Raise maxN in surScat to add axes case by case.")
-
+  # Coordinates are collapsed with the weights surScat collapsed its own with, so that every
+  # plane of the selector stands for the same point. Stating weight overrides them, and a
+  # vector of ones brings the plain arithmetic mean back.
+  if(is.null(weight)) weight <- attr(scatObj, "caseWeight")
   if(!is.null(weight) && length(weight) != nrow(pair))
     stop("weight must have one value per row of ", what)
 
@@ -176,6 +174,7 @@ addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL) {
   sets    <- extractAxesList(axes, which)
   several <- length(sets) > 1
   layouts <- currentLayouts(scatObj)
+  renamed <- renamedTo <- character(0) # planes the object already held
 
   for(i in seq_along(sets)) {
     own <- names(sets)[i]
@@ -187,10 +186,20 @@ addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL) {
            } else if(several) {
              paste0(name, ".", own)
            } else name
+    asked <- key
     key <- make.unique(c(names(layouts), key))[length(layouts)+1]
+    if(!identical(key, asked)) { # a plane of that name is already there
+      renamed   <- c(renamed, asked)
+      renamedTo <- c(renamedTo, key)
+    }
 
     layouts[[key]] <- alignAxes(scatObj, sets[[i]], weight=weight, label=key)
   }
+
+  if(length(renamed))
+    warning("the object already held ", nameClash(renamed, renamedTo),
+            ". State name to tell them apart, or drop the previous planes to avoid ",
+            "repeating a set of axes.", call.=FALSE)
 
   scatObj$layouts <- layouts
   return(scatObj)

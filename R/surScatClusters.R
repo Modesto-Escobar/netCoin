@@ -83,6 +83,81 @@ listL4CClusters <- function(x) {
 }
 
 
+## tidyLPAName ----
+# Name of a tidyLPA solution, in the "method(k)" style the other clusterizations follow, so
+# that a latent profile analysis of four profiles reads "LPA(4)" and is labelled "LPA: 1" ...
+# "LPA: 4". A tidyLPA object estimated for several model specifications at once tells them
+# apart by the number tidyLPA gives each, as in "LPA1(4)" and "LPA6(4)", since the analysis
+# is then no longer a single one; oneModel says whether that is the case.
+tidyLPAName <- function(model, classes, oneModel=TRUE) {
+  if(is.null(model) || is.na(model)) model <- 1
+  stem <- if(oneModel) "LPA" else paste0("LPA", model)
+  if(is.null(classes) || is.na(classes)) return(stem)
+  paste0(stem, "(", classes, ")")
+}
+
+
+## listTidyLPAClusters ----
+# Enumerate every solution held by a tidyLPA object, as a named list of cluster
+# vectors, one entry per (model_number, classes_number) pair.
+# get_data() answers in two shapes: a single solution comes wide, one row per case,
+# carrying no id; several solutions come long, one row per case and class, stacked
+# in one block per pair, so each block is reduced back to one row per case through
+# its id column. Reading the long shape as if it were the wide one is what made
+# addClusters see n*sum(k) assignments instead of n.
+listTidyLPAClusters <- function(x) {
+  data <- as.data.frame(tidyLPA::get_data(x)) # a tibble warns on absent columns
+  has <- function(column) column %in% names(data)
+  if(!has("Class"))
+    stop("tidyLPA object must have Class column in returned data")
+  model   <- if(has("model_number"))   data$model_number   else rep(1L, nrow(data))
+  classes <- if(has("classes_number")) data$classes_number else rep(NA_integer_, nrow(data))
+
+  if(!has("id")) # a single solution already holds one row per case
+    return(stats::setNames(list(as.vector(as.integer(as.factor(data$Class)))),
+                           tidyLPAName(model[1], classes[1])))
+
+  combos <- unique(data.frame(model=model, classes=classes))
+  oneModel <- length(unique(combos$model)) == 1 # one specification: its number adds nothing
+  out <- list()
+  for(i in seq_len(nrow(combos))) {
+    block <- data[model == combos$model[i] & classes == combos$classes[i], , drop=FALSE]
+    block <- block[!duplicated(block$id), , drop=FALSE] # k rows per case, Class constant
+    block <- block[order(block$id), , drop=FALSE]       # back to the original case order
+    out[[tidyLPAName(combos$model[i], combos$classes[i], oneModel)]] <-
+      as.vector(as.integer(as.factor(block$Class)))
+  }
+  out
+}
+
+
+## selectTidyLPAClusters ----
+# Pick one solution out of a tidyLPA object.
+# which: NULL (the first one), an index, or a name such as "model_1(3)".
+selectTidyLPAClusters <- function(x, which=NULL) {
+  sets <- listTidyLPAClusters(x)
+  if(is.null(which)) {
+    if(length(sets) > 1)
+      warning("the tidyLPA object holds ", length(sets),
+              " solutions and the first one was taken; state which to choose another: ",
+              paste(names(sets), collapse=", "), call.=FALSE)
+    return(sets[[1]])
+  }
+  if(is.numeric(which)) {
+    if(length(which) != 1 || which < 1 || which > length(sets))
+      stop("which must be a single index between 1 and ", length(sets))
+    return(sets[[which]])
+  }
+  if(is.character(which) && length(which) == 1) {
+    if(!(which %in% names(sets)))
+      stop("which=\"", which, "\" is not among the solutions of the tidyLPA object: ",
+           paste(names(sets), collapse=", "))
+    return(sets[[which]])
+  }
+  stop("which must be NULL, a single index or a single name")
+}
+
+
 ## extractClusters ----
 # Extract cluster assignments from various clustering objects
 # Supports: kmeans, poLCA, tidyLPA, looking4clusters, hclust (via cutree), or direct vector/factor
@@ -110,9 +185,7 @@ extractClusters <- function(x, sourceData=NULL, which=NULL) {
 
   # tidyLPA result
   if(inherits(x, "tidyLPA")) {
-    data <- tidyLPA::get_data(x)
-    if(!is.null(data$Class)) return(as.vector(as.integer(data$Class)))
-    stop("tidyLPA object must have Class column in returned data")
+    return(selectTidyLPAClusters(x, which))
   }
 
   # hclust result (should be cut first, but allow passing pre-cut vector)
@@ -133,14 +206,20 @@ extractClusters <- function(x, sourceData=NULL, which=NULL) {
 
 ## extractClusterList ----
 # Reduce any accepted input to a named list of cluster vectors, so that holders of
-# several clusterizations (a data.frame, a looking4clusters object) and single ones
-# (a vector, kmeans, poLCA, tidyLPA) all travel the same path.
+# several clusterizations (a data.frame, a looking4clusters object, a tidyLPA object
+# estimated for several numbers of profiles) and single ones (a vector, kmeans,
+# poLCA, a tidyLPA object of one solution) all travel the same path.
 # Names are the ones each clusterization carries; an empty name means it has none of
 # its own, and the caller supplies it.
 extractClusterList <- function(x, sourceData=NULL, which=NULL) {
   # looking4clusters with no choice made: every clusterization it holds
   if(inherits(x, "looking4clusters") && is.null(which)) {
     return(listL4CClusters(x))
+  }
+
+  # tidyLPA with no choice made: every solution it holds
+  if(inherits(x, "tidyLPA") && is.null(which)) {
+    return(listTidyLPAClusters(x))
   }
 
   # data.frame of several columns, one clusterization each
@@ -202,6 +281,7 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
 
   sets <- extractClusterList(clusters, sourceData, which)
   several <- length(sets) > 1
+  renamed <- renamedTo <- character(0) # clusterizations the node table already held
 
   for(i in seq_along(sets)) {
     own <- names(sets)[i]
@@ -222,12 +302,23 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
               } else if(several) {
                 paste0(name, ".", own)
               } else name
-    if(!is.null(column))
+    if(!is.null(column)) {
+      asked  <- column
       column <- make.unique(c(names(scatObj$nodes), column))[length(names(scatObj$nodes))+1]
+      if(!identical(column, asked)) { # a column of that name is already there
+        renamed   <- c(renamed, asked)
+        renamedTo <- c(renamedTo, column)
+      }
+    }
 
     scatObj <- addOneCluster(scatObj, sets[[i]], name=column, sort=sort,
                              weight=weight, sourceData=sourceData)
   }
+
+  if(length(renamed))
+    warning("the node table already held ", nameClash(renamed, renamedTo),
+            ". State name to tell them apart, or drop the previous columns to avoid ",
+            "repeating a clusterization.", call.=FALSE)
 
   return(scatObj)
 }
@@ -291,8 +382,12 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
       clusterDisplay <- clusterDisplay  # Use display values later
     } else {
       stop(paste0("clusters has length ", length(clusters), " but scatObj has ",
-                  nrow(scatObj$nodes), " nodes. If clusters are case-level and scatObj has ",
-                  "pattern-level nodes, surScat must have been called with vPatterns."))
+                  nrow(scatObj$nodes), " nodes. Clusters must hold one assignment per node, ",
+                  "or one per case when the nodes are patterns collapsed by vPatterns. ",
+                  "A clustering object holding several solutions at once, such as a tidyLPA ",
+                  "estimated for several numbers of profiles, is taken apart into one ",
+                  "clusterization per solution, so it need not be reduced beforehand.",
+                  sampledNote(scatObj)))
     }
   }
 
@@ -314,12 +409,17 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
     all_cluster_values <- union(all_cluster_values, all_vals_in_display)
   }
 
-  # Sort clusters if requested (by mean coordinate on first layout axis)
-  if(sort && !is.null(scatObj$layout) && ncol(scatObj$layout) > 0) {
+  # Sort clusters if requested, by their mean coordinate on the first axis as drawn.
+  # The layout is read exactly, as $layout would partially match the $layouts that
+  # addAxes adds; and a surScat object keeps no layout of its own, since its
+  # coordinates reach the nodes as the fx/fy columns instead.
+  lay <- scatObj[["layout"]]
+  layout_first <- if(!is.null(lay) && !is.null(ncol(lay)) && ncol(lay) > 0) lay[,1]
+                  else scatObj$nodes$fx
+  if(sort && !is.null(layout_first) && length(layout_first) == length(cl)) {
     # For sorting, use ALL cluster values (including non-modal), but compute mean only for modals
     # Non-modal clusters inherit the mean of their pattern's modal cluster
     cf <- factor(cl, levels=unique_cl)
-    layout_first <- scatObj$layout[,1]
     if(is.null(weight)) {
       mu_modal <- tapply(layout_first, cf, mean)
     } else {
@@ -387,8 +487,10 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
 
   # Labels are prefixed with the name of the clusterization they come from, dropping the
   # trailing number of groups and capitalized, so "hclust(10)" reads "Hclust: 01".
+  # A clusterization added twice reaches this point renamed by make.unique, so the
+  # suffix it appends is dropped as well and "hclust(10).1" reads "Hclust: 01" too.
   # The localized word is kept for the case of a column with no name of its own.
-  groupWord <- sub("\\([0-9]+\\)$", "", name)
+  groupWord <- sub("\\([0-9]+\\)(\\.[0-9]+)?$", "", name)
   if(nzchar(groupWord))
     groupWord <- paste0(toupper(substring(groupWord, 1, 1)), substring(groupWord, 2))
   else

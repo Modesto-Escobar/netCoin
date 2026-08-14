@@ -228,3 +228,30 @@ toColorScale <- function(items){
     return(colors[items])
   }
 }
+
+
+## nameClash ----
+# Wording of the names make.unique had to disambiguate, shared by addClusters and
+# addAxes so that both report a repeated addition the same way. Only the first few
+# are spelled out, as a clustering object can carry dozens of them at once.
+nameClash <- function(asked, given, shown=5) {
+  pairs <- paste0("\"", utils::head(asked, shown), "\" (added again as \"",
+                  utils::head(given, shown), "\")")
+  out <- paste(pairs, collapse=", ")
+  if(length(asked) > shown) out <- paste0(out, " and ", length(asked)-shown, " more")
+  out
+}
+
+
+## sampledNote ----
+# The sentence addClusters and addAxes append to a size mismatch when maxN drew a sample of
+# the nodes. Nothing computed case by case can be matched to a sample of the cases, so the
+# way out is to work on the node table the object carries, which is that sample.
+sampledNote <- function(scatObj) {
+  from <- attr(scatObj, "sampledFrom")
+  if(is.null(from)) return("")
+  paste0(" These ", nrow(scatObj$nodes), " nodes were drawn at random out of ", from,
+         ", as maxN capped them, so anything computed on the whole data no longer lines up",
+         " with them. Compute it on the node table of this object instead, which holds the",
+         " sample itself, or raise maxN so that every case is drawn.")
+}
