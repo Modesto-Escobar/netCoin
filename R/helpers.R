@@ -24,6 +24,15 @@ names(groupsList) <- languages
 restList <- c('rest','resto','resta')
 names(restList) <- languages
 
+# What the axes are called once a scattergram holds more than one plane. The viewer keeps a
+# single pair of labels for all of them, so naming either plane would put a false label on
+# the other; these say no more than which axis is which. See addAxes.
+xAxisList <- c('X axis','Eje X','Eix X')
+names(xAxisList) <- languages
+
+yAxisList <- c('Y axis','Eje Y','Eix Y')
+names(yAxisList) <- languages
+
 casesList <- c('Cases','Casos','Casos')
 names(casesList) <- languages
 

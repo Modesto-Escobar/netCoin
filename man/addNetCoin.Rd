@@ -16,6 +16,18 @@ addNetCoin(x, ...)
 \item{x}{A 'netCoin' object.}
 \item{...}{Any \link{netCoin} argument.}
 }
+\details{
+The object is rebuilt out of its own options, with the ones stated here replacing them, so
+anything not among the arguments of \link{netCoin} would be lost in the rebuilding and is
+carried over instead: the planes \code{\link{addAxes}} added, and what a scattergram records
+about how its nodes stand for the cases, which \code{\link{addClusters}},
+\code{\link{addCommunities}} and \code{replaceClusters} read afterwards. Stating
+\code{layout} replaces the planes, as asked; replacing \code{nodes} with a table of another
+length carries none of it over, since none of it would describe those nodes.
+
+Nodes drawn with no label at all, as \code{\link{surScat}} draws them, keep it that way. A
+label is restored by naming its column, as in \code{label="name"}.
+}
 \references{
   Escobar, M. and Martinez-Uribe, L. (2020)
   Network Coincidence Analysis: The \code{netCoin} \code{R} Package.

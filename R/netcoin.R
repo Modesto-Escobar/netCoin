@@ -179,7 +179,32 @@ addNetCoin <- function(x, ...){
       arguments[[item]] <- getOpt(attributes[[item]],item)
     }
 
-    return(do.call(netCoin,arguments))
+    # An absent nodeLabel means the nodes are drawn with no label at all, which is what
+    # surScat asks for through label="", whereas an absent label argument makes netCoin
+    # fall back to the name column. The two NULLs stand for opposite things, and the loop
+    # above turns the first into the second, since assigning NULL drops the argument and
+    # lets the default back in. The emptied label is thus restated as such.
+    if(!("label" %in% names(arguments)) && !is.null(options) && is.null(options[["nodeLabel"]]))
+      arguments$label <- ""
+
+    net <- do.call(netCoin,arguments)
+
+    # netCoin builds the object anew out of its arguments, so whatever is not one of them
+    # has to be carried over: the planes addAxes added, which live in $layouts, and the
+    # attributes surScat attaches to say how the nodes stand for the cases (caseToPattern,
+    # caseWeight, sampledNodes, sampledFrom) or which columns hold clusterizations. Without
+    # this, a call meant to change a colour silently cost the object its second plane, its
+    # ability to collapse a case-level clusterization, and the guards maxN relies on.
+    # A caller replacing the nodes themselves is taken at its word: none of that survives a
+    # node table of another length, so it is not carried over.
+    if(identical(nrow(net$nodes), nrow(x$nodes))) {
+      if(is.null(arguments$layout) && length(x$layouts) && !length(net$layouts))
+        net$layouts <- x$layouts
+      for(a in setdiff(names(attributes(x)), names(attributes(net))))
+        attr(net, a) <- attr(x, a)
+    }
+
+    return(net)
 }
 
 ##savePajek ----

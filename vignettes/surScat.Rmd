@@ -1,0 +1,158 @@
+---
+title: "surScat"
+author: Modesto Escobar
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{surScat}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 3.6
+)
+library(netCoin)
+```
+
+Where `surCoin()` puts the categories of the variables on the graph, `surScat()` puts the **cases themselves**. Each case becomes a node, placed on a factorial plane extracted from the variables and coloured by the group it falls into. The result is a `netCoin` object holding the nodes, their coordinates and the options, which can be plotted as an interactive scattergram.
+
+# The data
+
+`iris` holds 150 flowers, four measurements of each and the species it belongs to. The species is what makes it useful here: it is held out of the analysis as an **illustrative variable**, so it does not shape the plane, but it travels with the cases and can be compared afterwards against whatever grouping is found.
+
+```{r}
+head(iris, 3)
+```
+
+# A first scattergram
+
+`variables` are the columns that travel with the cases; `active` are the ones that build the plane.
+
+```{r}
+S <- surScat(iris, variables = names(iris), active = names(iris)[1:4])
+```
+
+All four active variables are numeric, so `surScat()` runs a **principal component analysis**. Had any of them been a factor it would have run a multiple correspondence analysis instead; `type` states it explicitly. Each axis is labelled with the share of variance it accounts for:
+
+```{r}
+S$options$axesLabels
+```
+
+The node table holds one row per case: its variables, the coordinates `fx` and `fy` on the plane, and the clusterization `surScat()` computes on its own, of `nclusters = 2` groups by default.
+
+```{r}
+head(S$nodes[, c("Species", "Groups(2)", "fx", "fy")], 3)
+```
+
+Two groups are enough to tell one species from the other two, which is as far as two groups can go:
+
+```{r}
+table(S$nodes[["Groups(2)"]], S$nodes$Species)
+```
+
+The interactive scattergram opens in the browser, where the cases can be hovered, filtered and recoloured by any column of the node table:
+
+```{r eval = FALSE}
+plot(S)
+```
+
+Drawn statically from those same coordinates, the plane looks like this, with the default grouping on the left and the species on the right:
+
+```{r echo = FALSE}
+op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1), cex = 0.7)
+for (v in c("Groups(2)", "Species")) {
+  f <- factor(S$nodes[[v]])
+  plot(S$nodes$fx, S$nodes$fy, col = seq_along(levels(f))[f], pch = 19, cex = 0.7,
+       xlab = S$options$axesLabels[1], ylab = S$options$axesLabels[2], main = v)
+  legend("topleft", legend = levels(f), col = seq_along(levels(f)), pch = 19, bty = "n")
+}
+par(op)
+```
+
+# Adding clusterizations
+
+`addClusters()` takes a clusterization computed elsewhere and adds it as one more column, so that several ways of grouping the same cases can be compared on one plane. A `kmeans` object is understood as it comes:
+
+```{r}
+set.seed(1)
+km <- kmeans(scale(iris[, 1:4]), 3, nstart = 25)
+S <- addClusters(S, km, name = "kmeans(3)")
+table(S$nodes[["kmeans(3)"]], S$nodes$Species)
+```
+
+An `hclust` has to be cut first, since the number of groups is not part of it:
+
+```{r}
+hc <- cutree(hclust(dist(scale(iris[, 1:4]))), 3)
+S <- addClusters(S, hc, name = "hclust(3)")
+table(S$nodes[["hclust(3)"]], S$nodes$Species)
+```
+
+Every column is an ordered factor whose groups are numbered by their mean coordinate on the first axis, so that group 1 always sits on the left. The labels take the name of the column without its number of groups, so `"kmeans(3)"` reads `"Kmeans: 1"` and on.
+
+## Several solutions at once
+
+An object holding more than one solution is taken apart into one column per solution, each named after the method and its number of groups. A `tidyLPA` estimated for two, three and four profiles yields `LPA(2)`, `LPA(3)` and `LPA(4)` in a single call:
+
+```{r eval = requireNamespace("tidyLPA", quietly = TRUE)}
+mod <- tidyLPA::estimate_profiles(iris[, 1:4], 2:4,
+                                  variances = "equal", covariances = "zero")
+S <- addClusters(S, mod)
+table(S$nodes[["LPA(3)"]], S$nodes$Species)
+```
+
+Of the three ways of cutting the cases in three, the latent profiles are the one that comes closest to the species.
+
+# Communities of the cases
+
+`addCommunities()` groups the cases by a different route. It correlates them **with one another** over the variables, which is a transposed reading of the data frame: each case becomes a column and each variable a row, so that a link joins two cases whose profiles run parallel. The communities of that network are then a grouping of the cases, and reach the node table as any other one does.
+
+```{r}
+S <- addCommunities(S, iris, variables = names(iris)[1:4], community = c("lo", "wa"))
+lou <- grep("^louvain", names(S$nodes), value = TRUE)
+table(S$nodes[[lou]], S$nodes$Species)
+```
+
+Note what this does and does not recover. One species comes out almost clean, while the other two stay mixed together across the communities. That is the method speaking, not a failure: a correlation between two cases centres each of them on **its own mean across the variables**, so what it compares is the *shape* of a profile, not its size. One species has a distinctly shaped flower, with petals small relative to its sepals; the other two share that shape and differ mostly in magnitude, which this reading deliberately sets aside.
+
+Three arguments govern the result:
+
+* `scale` standardizes the variables before transposing. It is on by default, because without it the variable of widest range writes the profile on its own.
+* `minL` is how high a correlation two cases need to be linked. Raising it makes the network sparser, and the communities more and smaller.
+* `minSize` gathers the communities below it into a residual group, since a network of cases leaves isolated ones behind and igraph returns each of them as a community of its own. That group is pinned last and labelled with a word instead of a number, so it reads apart from the real ones.
+
+```{r}
+levels(S$nodes[[lou]])
+```
+
+Eight methods are available, by code or by name: `edgeBetweenness` (`ed`), `fastGreedy` (`fa`), `labelProp` (`la`), `leadingEigen` (`le`), `louvain` (`lo`), `optimal` (`op`), `spinglass` (`sp`) and `walktrap` (`wa`). Their costs do not grow alike, and each carries the size it can meet: `louvain` answers on thousands of cases in seconds, whereas `optimal` solves the exact maximum by integer programming and does not reach the 150 of `iris`.
+
+```{r error = TRUE}
+addCommunities(S, iris, variables = names(iris)[1:4], community = "op")
+```
+
+# A second plane
+
+The scattergram is drawn on one plane, but others can be added to it and picked from a selector. `addAxes()` takes two further coordinates, either factorial or observed, and adds them under a name of their own:
+
+```{r}
+S <- addAxes(S, iris[, c("Petal.Length", "Sepal.Width")], name = "petals")
+names(S$layouts)
+```
+
+Each clusterization stays as it is; only the coordinates change under it, which is what makes the two planes comparable.
+
+# Larger data
+
+Two arguments matter once the cases are many. `patterns` collapses the cases that share the same values into a single node, whose size is how many they are; a clusterization computed case by case is then reduced to the commonest group of each pattern. And `maxN`, 2000 by default, caps the nodes by drawing a random sample of them, since a scattergram of tens of thousands of points is neither readable nor quick. The object records which cases were drawn, so that `addCommunities()` can build its network on them.
+
+# Saving and exporting
+
+```{r eval = FALSE}
+plot(S, dir = "./temp/iris/")   # write the interactive page to a directory
+saveGhml(S, file = "iris.graphml")
+```

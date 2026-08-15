@@ -164,7 +164,12 @@ currentLayouts <- function(scatObj) {
 # which: reduction to take from a looking4clusters object, as a name or an index. When it
 #        is left empty, every reduction held by the object is added.
 # weight: weights of the cases, used when collapsing them into patterns.
-addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL) {
+# axesLabels: what to call the two axes now that the object holds more than one plane. The
+#        viewer keeps one pair of labels for every plane, so the ones the first plane was
+#        drawn with would be read over the added one as if they described it. They are
+#        replaced by labels saying no more than which axis is which; stating this argument
+#        puts another pair, and NA keeps whatever the object already had.
+addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL, axesLabels=NULL) {
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
 
@@ -202,5 +207,19 @@ addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL) {
             "repeating a set of axes.", call.=FALSE)
 
   scatObj$layouts <- layouts
+
+  # The labels of the axes belong to the object, not to each plane, so once there is more
+  # than one plane no pair of names can describe them all: those of the plane drawn first
+  # would be read over every other one, saying "PC1 (73.0%)" above coordinates that are
+  # nothing of the sort. They are replaced by labels that only tell one axis from the other,
+  # which says less but never says something false.
+  if(!identical(axesLabels, NA) && length(layouts) > 1) {
+    language <- scatObj$options$language
+    if(is.null(language)) language <- "en"
+    scatObj$options$axesLabels <- if(is.null(axesLabels))
+        c(getByLanguage(xAxisList, language), getByLanguage(yAxisList, language))
+      else as.character(axesLabels)
+  }
+
   return(scatObj)
 }
