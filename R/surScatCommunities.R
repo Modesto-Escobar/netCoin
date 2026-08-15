@@ -59,7 +59,12 @@ communityCode <- function(method) {
 # community was large enough) and what was gathered, for the message to the caller.
 lumpCommunities <- function(membership, minSize) {
   n <- length(membership)
-  threshold <- if(minSize < 1) max(1L, as.integer(ceiling(minSize*n))) else as.integer(minSize)
+  # Read as a proportion, the threshold falls to one on few cases, and a threshold of one
+  # gathers nothing, since every community holds at least one case. That is where the
+  # isolated cases are most of them, so the proportional reading keeps a floor of two: a
+  # community of a single case is not a group. An outright count is taken as it is, so that
+  # minSize=1 still means that every community is to be kept apart.
+  threshold <- if(minSize < 1) max(2L, as.integer(ceiling(minSize*n))) else as.integer(minSize)
   sizes <- table(membership)
   big   <- names(sizes)[sizes >= threshold]
   if(!length(big))

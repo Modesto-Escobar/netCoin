@@ -32,8 +32,9 @@ or "p" for its significance.}
 \item{maxL}{highest value of \code{criteria} a pair of cases may have to be linked.}
 \item{pairwise}{use pairwise complete observations for the correlations.}
 \item{minSize}{communities holding fewer cases than this are gathered into a residual group,
-read as a proportion of the cases when below 1 and as a count of them otherwise. 1 keeps every
-community apart.}
+read as a proportion of the cases when below 1 and as a count of them otherwise. Read as a
+proportion it never falls below two cases, since a community of a single case is not a group.
+1 keeps every community apart.}
 \item{name}{name of the new cluster column. Each column keeps the name of its method by
 default, and 'name' becomes a prefix when several methods are asked for at once.}
 \item{sort}{sort the groups by their mean coordinate on the first axis. The residual group is
