@@ -271,8 +271,11 @@ validateClusterOrder <- function(clusters, sourceData, nCases) {
 #        empty, every clusterization held by the object is added as its own column.
 # maxGroups: clusterizations with more groups than this are skipped with a warning,
 #            which catches continuous variables passed in by mistake. NULL disables it.
+# rest: the group number that stands for the residual group, which is pinned last in the
+#       ordering and labelled with a word instead of a number. addCommunities sets it;
+#       a clusterization with no residual group leaves it NULL.
 addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, sourceData=NULL,
-                        which=NULL, maxGroups=25) {
+                        which=NULL, maxGroups=25, rest=NULL) {
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
 
@@ -312,7 +315,7 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     }
 
     scatObj <- addOneCluster(scatObj, sets[[i]], name=column, sort=sort,
-                             weight=weight, sourceData=sourceData)
+                             weight=weight, sourceData=sourceData, rest=rest)
   }
 
   if(length(renamed))
@@ -327,7 +330,9 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
 ## addOneCluster ----
 # Add a single cluster column to a netCoin object. Expects clusters already
 # reduced to a plain vector by extractClusters.
-addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, sourceData=NULL) {
+# rest: the group standing for the residual one, if there is any. See addClusters.
+addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, sourceData=NULL,
+                          rest=NULL) {
   # Extract language setting for labels
   language <- scatObj$options$language
   if(is.null(language)) language <- "en"
@@ -413,6 +418,9 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
   # The layout is read exactly, as $layout would partially match the $layouts that
   # addAxes adds; and a surScat object keeps no layout of its own, since its
   # coordinates reach the nodes as the fx/fy columns instead.
+  # Which group number, if any, stands for the residual one. Sorting renumbers the groups,
+  # so this is updated below to whatever number it ends up carrying.
+  restNum <- if(is.null(rest)) NA_integer_ else as.integer(rest)
   lay <- scatObj[["layout"]]
   layout_first <- if(!is.null(lay) && !is.null(ncol(lay)) && ncol(lay) > 0) lay[,1]
                   else scatObj$nodes$fx
@@ -438,6 +446,12 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
         mu_all[unique_cl[i]] <- mu_modal[unique_cl[i]]
       }
     }
+
+    # The residual group gathers whatever was too small to be a group of its own, so the
+    # mean coordinate of its cases says nothing about where it sits. It is pinned after
+    # every real group instead of taking a place among them by a meaningless average.
+    if(!is.na(restNum) && as.character(restNum) %in% names(mu_all))
+      mu_all[as.character(restNum)] <- Inf
 
     # Renumber clusters based on sorted order (use all_cluster_values so all values have a mapping)
     order_idx <- order(mu_all[as.character(all_cluster_values)])
@@ -474,6 +488,7 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
     }
     n_clusters <- length(all_cluster_values_sorted)
     unique_cl <- as.character(seq_len(n_clusters))
+    if(!is.na(restNum)) restNum <- n_clusters # pinned last by the Inf above
   }
 
   # Use display values (with multiple clusters) if available, otherwise use cl values
@@ -500,15 +515,22 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
   width <- max(nchar(as.character(unlist(lapply(unique_cl_values, splitGroups)))), 1L)
   padded <- function(val) sprintf(paste0("%0", width, "d"), splitGroups(val))
 
-  # Levels must follow the group number, not the order the values happen to appear in
+  # Levels must follow the group number, not the order the values happen to appear in.
+  # The residual group carries the highest number, so padding keeps it last here too.
   unique_cl_values <- unique_cl_values[order(vapply(unique_cl_values,
                                                     function(val) paste(padded(val), collapse="|"),
                                                     character(1)))]
 
-  # Create labels by adding prefix to each cluster number
+  # Create labels by adding prefix to each cluster number. The residual group reads as a
+  # word rather than a number, so that it cannot be taken for one more group of the series.
+  restWord <- getByLanguage(restList, language)
+  shown <- function(val) vapply(splitGroups(val),
+                                function(g) if(!is.na(restNum) && g == restNum) restWord
+                                            else sprintf(paste0("%0", width, "d"), g),
+                                character(1))
   labels_with_prefix <- vapply(unique_cl_values, function(val) {
-    # Pad each number, add prefix to each, rejoin
-    paste(paste0(groupWord, ": ", padded(val)), collapse="|")
+    # Render each number, add prefix to each, rejoin
+    paste(paste0(groupWord, ": ", shown(val)), collapse="|")
   }, character(1), USE.NAMES=FALSE)
 
   cl_factor <- factor(cl_values, levels=unique_cl_values, labels=labels_with_prefix, ordered=TRUE)

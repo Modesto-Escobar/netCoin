@@ -18,6 +18,12 @@ names(groupList) <- languages
 groupsList <- c('Groups','Grupos','Grups')
 names(groupsList) <- languages
 
+# The residual group addCommunities gathers the communities below minSize into. It is
+# rendered as a word where the other groups carry a number, so that a reader telling the
+# groups apart in a legend cannot take it for one more of them.
+restList <- c('rest','resto','resta')
+names(restList) <- languages
+
 casesList <- c('Cases','Casos','Casos')
 names(casesList) <- languages
 

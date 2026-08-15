@@ -10,7 +10,7 @@ A 'netCoin' object.
 
 \usage{
 addClusters(scatObj, clusters, name=NULL, sort=TRUE,
-  weight=NULL, sourceData=NULL, which=NULL, maxGroups=25)
+  weight=NULL, sourceData=NULL, which=NULL, maxGroups=25, rest=NULL)
 }
 \arguments{
 \item{scatObj}{A 'netCoin' object.}
@@ -29,6 +29,11 @@ one per number of groups, named after the method and that number, as in "kmeans(
 \item{maxGroups}{clusterizations with more groups than this are skipped with a warning, which
 keeps a continuous variable passed in by mistake from becoming a column of hundreds of groups.
 NULL adds them all.}
+\item{rest}{the group standing for a residual one, gathering what was left over rather than
+found. It is pinned after every real group instead of taking a place among them by sorting,
+and it is labelled with a word ("rest", "resto", "resta") where the others carry a number, so
+that a reader cannot take it for one more group of the series. \code{\link{addCommunities}}
+sets it; a clusterization with no residual group leaves it NULL.}
 }
 \details{
 Each column is an ordered factor whose levels follow the group number. Their labels are prefixed
