@@ -9,22 +9,27 @@
 # cluster_optimal is exponential and gives up inside igraph well below a thousand. The cap
 # is stated per method so that the refusal names a number the method can actually meet,
 # rather than letting igraph fail deep inside with a message about none of this.
+# random marks the three which draw on the random number generator, and so answer differently
+# on the same network from one run to the next: louvain and label propagation sweep the nodes
+# in a random order, and spinglass anneals from a random state. The other five are determinate.
+# Only these three need the seed, but it is set for all of them alike, since a method may be
+# given the generator by igraph for a reason this list does not know about.
 communityAlgorithms <- list(
-  ed = list(name="edgeBetweenness", maxNodes=2000,
+  ed = list(name="edgeBetweenness", maxNodes=2000, random=FALSE,
             fun=function(g, w) igraph::cluster_edge_betweenness(g, weights=w)),
-  fa = list(name="fastGreedy",      maxNodes=Inf,
+  fa = list(name="fastGreedy",      maxNodes=Inf,  random=FALSE,
             fun=function(g, w) igraph::cluster_fast_greedy(g, weights=w)),
-  la = list(name="labelProp",       maxNodes=Inf,
+  la = list(name="labelProp",       maxNodes=Inf,  random=TRUE,
             fun=function(g, w) igraph::cluster_label_prop(g, weights=w)),
-  le = list(name="leadingEigen",    maxNodes=Inf,
+  le = list(name="leadingEigen",    maxNodes=Inf,  random=FALSE,
             fun=function(g, w) igraph::cluster_leading_eigen(g, weights=w)),
-  lo = list(name="louvain",         maxNodes=Inf,
+  lo = list(name="louvain",         maxNodes=Inf,  random=TRUE,
             fun=function(g, w) igraph::cluster_louvain(g, weights=w)),
-  op = list(name="optimal",         maxNodes=100,
+  op = list(name="optimal",         maxNodes=100,  random=FALSE,
             fun=function(g, w) igraph::cluster_optimal(g, weights=w)),
-  sp = list(name="spinglass",       maxNodes=2000,
+  sp = list(name="spinglass",       maxNodes=2000, random=TRUE,
             fun=function(g, w) igraph::cluster_spinglass(g, weights=w)),
-  wa = list(name="walktrap",        maxNodes=Inf,
+  wa = list(name="walktrap",        maxNodes=Inf,  random=FALSE,
             fun=function(g, w) igraph::cluster_walktrap(g, weights=w))
 )
 
@@ -55,16 +60,22 @@ communityCode <- function(method) {
 # network of cases leaves isolated nodes behind, and each of them comes out of igraph as a
 # community of its own, so without this a scattergram of three readable groups reports
 # dozens and runs into maxGroups.
+# maxCommunities caps how many groups come out of all this, by size rather than by rule: what
+# minSize cannot foresee is how many communities will clear it, and a legend has room for so
+# many. The two criteria gather into the same residual group, and a community falling to
+# either of them ends up there.
 # Answers the renumbered assignments, the number of the residual group (NA when every
 # community was large enough) and what was gathered, for the message to the caller.
-lumpCommunities <- function(membership, minSize) {
+lumpCommunities <- function(membership, minSize, maxCommunities=NULL) {
   n <- length(membership)
   # Read as a proportion, the threshold falls to one on few cases, and a threshold of one
   # gathers nothing, since every community holds at least one case. That is where the
   # isolated cases are most of them, so the proportional reading keeps a floor of two: a
   # community of a single case is not a group. An outright count is taken as it is, so that
   # minSize=1 still means that every community is to be kept apart.
-  threshold <- if(minSize < 1) max(2L, as.integer(ceiling(minSize*n))) else as.integer(minSize)
+  # Both readings round up, so that a community of fewer cases than minSize is gathered
+  # whatever minSize is: truncating a count instead kept communities of two on minSize=2.9.
+  threshold <- if(minSize < 1) max(2L, as.integer(ceiling(minSize*n))) else as.integer(ceiling(minSize))
   sizes <- table(membership)
   big   <- names(sizes)[sizes >= threshold]
   if(!length(big))
@@ -74,6 +85,21 @@ lumpCommunities <- function(membership, minSize) {
 
   # Big ones first, by decreasing size; sort=TRUE renumbers them by coordinate afterwards
   ordered <- names(sort(sizes[big], decreasing=TRUE))
+  nSmall  <- length(sizes) - length(big)
+
+  # The cap counts the groups of the legend, the residual one among them: asked for five with
+  # something left over, four communities are kept apart and the fifth group is the residual.
+  # Nothing is cut when the groups already fit, so a cap of five over four communities and no
+  # residual leaves the four alone rather than making a fifth group out of nothing. The cut
+  # runs over the communities minSize already found large enough, which reach this point
+  # sorted by decreasing size, so what it drops is always the smallest of them.
+  nRanked <- 0L
+  if(!is.null(maxCommunities) && length(ordered) + (nSmall > 0L) > maxCommunities) {
+    keep    <- as.integer(maxCommunities) - 1L
+    nRanked <- length(ordered) - keep
+    ordered <- ordered[seq_len(keep)]
+  }
+
   map <- stats::setNames(seq_along(ordered), ordered)
   out <- unname(map[as.character(membership)])
   lumped <- is.na(out)
@@ -86,7 +112,8 @@ lumpCommunities <- function(membership, minSize) {
        rest     = restNum,
        nGroups  = max(out),
        nLumped  = sum(lumped),
-       nSmall   = length(sizes) - length(big),
+       nSmall   = nSmall,
+       nRanked  = nRanked,
        threshold= threshold)
 }
 
@@ -108,21 +135,51 @@ lumpCommunities <- function(membership, minSize) {
 # scale: standardize each variable before transposing. On by default, since a correlation
 #        between two cases over variables of unlike ranges measures the ranges, not the profiles
 # minSize: communities below this are gathered into a residual group. See lumpCommunities
+# maxCommunities: how many groups may come out at most, the residual one among them. NULL
+#                 leaves as many as clear minSize. See lumpCommunities
 # maxNodes: how large a network a method may be asked about, overriding the ceiling each one
 #           carries. NULL keeps those; a number waits for a method past what it can bear
 # weight: passed to addClusters, where it weighs the mean coordinate each group is sorted by.
 #         It does not weigh the correlations, which cor() computes unweighted
+# seed: the random seed the methods are run from, so that a scattergram comes out the same
+#       twice. 2020 as in surScat; NULL leaves the generator alone. See below
 addCommunities <- function(scatObj, data, variables=names(data), community="lo",
                            scale=TRUE, method=c("pearson", "kendall", "spearman"),
                            criteria="value", minL=0.95, maxL=Inf, pairwise=FALSE,
-                           minSize=0.01, name=NULL, sort=TRUE, weight=NULL,
-                           maxGroups=25, maxNodes=NULL) {
+                           minSize=0.01, maxCommunities=NULL, name=NULL, sort=TRUE, weight=NULL,
+                           maxGroups=25, maxNodes=NULL, seed=2020) {
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
   if(missing(data) || is.null(data))
     stop("data must be the data frame the scattergram was drawn from")
   if(length(minSize) != 1 || is.na(minSize) || minSize <= 0)
     stop("minSize must be a proportion of the cases (below 1) or a count of them (1 or more)")
+  if(!is.null(maxCommunities)) {
+    if(length(maxCommunities) != 1 || !is.numeric(maxCommunities) || is.na(maxCommunities) ||
+       maxCommunities < 2)
+      stop("maxCommunities must be a count of two groups or more, the residual one among ",
+           "them, or NULL to leave as many groups as clear minSize")
+    # A cap of five and a half groups is a cap of five: unlike minSize, which rounds up so
+    # that a community smaller than it is always gathered, a bound on a count of groups is
+    # only honoured by rounding down
+    maxCommunities <- as.integer(maxCommunities)
+  }
+
+  # Three of the methods draw on the random number generator, so without a seed the same
+  # call answers differently from one run to the next: the communities move, their sizes
+  # move with them, and which of them minSize gathers moves too, which reads as if minSize
+  # itself were behaving erratically. The generator is left as it was found, as surScat
+  # leaves it, so that seeding a scattergram does not seed whatever the caller does next.
+  if(!is.null(seed)) {
+    if(length(seed) != 1 || !is.numeric(seed) || is.na(seed))
+      stop("seed must be a single number, or NULL to leave the random state as it is")
+    if(exists(".Random.seed", envir=globalenv())) {
+      oldseed <- get(".Random.seed", envir=globalenv())
+      on.exit(assign(".Random.seed", oldseed, envir=globalenv()), add=TRUE)
+    } else {
+      on.exit(rm(".Random.seed", envir=globalenv()), add=TRUE)
+    }
+  }
 
   codes <- vapply(community, communityCode, character(1), USE.NAMES=FALSE)
   if(anyDuplicated(codes))
@@ -220,6 +277,7 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
 
   ids <- igraph::V(g)$name # membership comes in this order, which need not be the node order
   reports <- character(0)
+  ranked  <- FALSE
   for(code in codes) {
     algo <- communityAlgorithms[[code]]
     limit <- if(is.null(maxNodes)) algo$maxNodes else maxNodes
@@ -231,6 +289,11 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
                  function(a) a$name, character(1)), collapse=", "),
            ", cap the nodes with maxN in surScat, or raise maxNodes to wait for it anyway.")
 
+    # Seeded once per method rather than once for the call, so that each method answers the
+    # same whichever others were asked for alongside it: otherwise a method would inherit
+    # whatever state the ones before it had left, and adding a method to community would
+    # move the communities of the ones after it.
+    if(!is.null(seed)) set.seed(seed)
     comm <- tryCatch(algo$fun(g, w), error=function(e)
       stop(algo$name, " could not find communities in this network: ", conditionMessage(e),
            if(sum(igraph::degree(g) == 0)) paste0(" It holds ", sum(igraph::degree(g) == 0),
@@ -239,7 +302,7 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
 
     memb <- igraph::membership(comm)
     memb <- as.integer(memb[match(ids, names(memb))]) # back to the order of the cases
-    lump <- lumpCommunities(memb, minSize)
+    lump <- lumpCommunities(memb, minSize, maxCommunities)
 
     # The column is named in the "method(k)" style the rest of the scattergram follows, so
     # that addOneCluster reads its prefix off the name and the legend says "Louvain: 1"
@@ -255,14 +318,21 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
     scatObj <- addClusters(scatObj, frame, sort=sort, weight=weight,
                            maxGroups=maxGroups, rest=lump$rest)
 
-    if(lump$nLumped)
-      reports <- c(reports, paste0(column, ": ", lump$nSmall, " communities of fewer than ",
-                   lump$threshold, " cases, ", lump$nLumped, " cases in all"))
+    # Which of the two criteria gathered what, since the way out differs: minSize is lowered,
+    # maxCommunities is raised, and the caller cannot tell which is in his way from a count
+    if(lump$nLumped) {
+      why <- c(if(lump$nSmall)  paste0(lump$nSmall, " of fewer than ", lump$threshold, " cases"),
+               if(lump$nRanked) paste0(lump$nRanked, " past the ", maxCommunities-1L, " largest"))
+      reports <- c(reports, paste0(column, ": ", lump$nSmall + lump$nRanked, " communities (",
+                   paste(why, collapse=", "), "), ", lump$nLumped, " cases in all"))
+      ranked  <- ranked || lump$nRanked > 0L
+    }
   }
 
   if(length(reports))
-    message("Gathered into the residual group -- ", paste(reports, collapse="; "),
-            ". Set minSize=1 to keep every community apart.")
+    message("Gathered into the residual group -- ", paste(reports, collapse="; "), ". Set ",
+            if(ranked) "minSize=1 and maxCommunities=NULL " else "minSize=1 ",
+            "to keep every community apart.")
 
   return(scatObj)
 }

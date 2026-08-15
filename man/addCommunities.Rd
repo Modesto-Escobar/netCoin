@@ -13,8 +13,8 @@ A 'netCoin' object.
 addCommunities(scatObj, data, variables=names(data), community="lo",
   scale=TRUE, method=c("pearson", "kendall", "spearman"),
   criteria="value", minL=0.95, maxL=Inf, pairwise=FALSE,
-  minSize=0.01, name=NULL, sort=TRUE, weight=NULL,
-  maxGroups=25, maxNodes=NULL)
+  minSize=0.01, maxCommunities=NULL, name=NULL, sort=TRUE,
+  weight=NULL, maxGroups=25, maxNodes=NULL, seed=2020)
 }
 \arguments{
 \item{scatObj}{A 'netCoin' object returned by \code{\link{surScat}}.}
@@ -32,9 +32,13 @@ or "p" for its significance.}
 \item{maxL}{highest value of \code{criteria} a pair of cases may have to be linked.}
 \item{pairwise}{use pairwise complete observations for the correlations.}
 \item{minSize}{communities holding fewer cases than this are gathered into a residual group,
-read as a proportion of the cases when below 1 and as a count of them otherwise. Read as a
-proportion it never falls below two cases, since a community of a single case is not a group.
-1 keeps every community apart.}
+read as a proportion of the cases when below 1 and as a count of them otherwise. Either reading
+is rounded up. Read as a proportion it never falls below two cases, since a community of a
+single case is not a group. 1 keeps every community apart.}
+\item{maxCommunities}{how many groups may come out at most, the residual one among them: 5
+keeps the four largest communities apart and gathers every other into a fifth group. Nothing is
+gathered on this account when the groups already fit. NULL (default) leaves as many groups as
+clear \code{minSize}.}
 \item{name}{name of the new cluster column. Each column keeps the name of its method by
 default, and 'name' becomes a prefix when several methods are asked for at once.}
 \item{sort}{sort the groups by their mean coordinate on the first axis. The residual group is
@@ -45,6 +49,8 @@ not weigh the correlations themselves.}
 \code{\link{addClusters}}.}
 \item{maxNodes}{how large a network a method may be asked about, overriding the ceiling each
 one carries. NULL keeps those.}
+\item{seed}{the random seed each method is run from, as in \code{\link{surScat}}. NULL leaves
+the random state as it is. The random state of the caller is restored on exit either way.}
 }
 \details{
 The cases are correlated with one another over the variables, which is the transposition of the
@@ -65,6 +71,23 @@ and igraph returns each of them as a community of its own. \code{minSize} gather
 other small community into one residual group, which is pinned after the real ones and labelled
 with a word instead of a number, so that it reads apart from them in a legend. Without it a
 scattergram of three readable groups reports dozens and runs into \code{maxGroups}.
+
+\code{minSize} sets a rule and lets the count of groups fall where it may; \code{maxCommunities}
+sets the count and lets the rule fall where it may, keeping the largest communities apart and
+gathering the rest, whatever their size. They work together, into one residual group, and a
+community falling to either of them ends up in it. Note that \code{maxGroups} is neither of
+these two: it gathers nothing, it merely refuses a clusterization of too many groups, so a
+\code{maxCommunities} at or below it means the column is always added.
+
+Three of the methods draw on the random number generator, and so answer differently on the same
+network from one run to the next: louvain and label propagation sweep the nodes in a random
+order, and spinglass anneals from a random state. The other five (edge betweenness, fast greedy,
+leading eigenvector, optimal and walktrap) return the same communities every time. Left to run
+unseeded, the unstable three move their communities between runs, and with them the sizes
+\code{minSize} is read against, so that the same \code{minSize} gathers a different set of
+communities each time. \code{seed} therefore defaults to 2020, as in \code{\link{surScat}}, and
+is set afresh before each method, so that a method answers the same whichever others were asked
+for alongside it in \code{community}.
 
 The whole network is built before the links are filtered, so its cost grows with the square of
 the number of cases: some thousands of them are a matter of seconds and a few gigabytes, and
