@@ -1,7 +1,7 @@
 Package: netCoin
 Type: Package
 Version: 2.1.38
-Date: 2026-08-15
+Date: 2026-08-17
 Title: Interactive Analytic Networks
 Description: Combines the data analysis capabilities of R with the interactive visualization libraries of JavaScript to create networks of coincidences, co-occurrences, correlations and regressions that can be explored directly in a browser, embedded in HTML files or integrated into Shiny applications. It also generates networked HTML galleries and other plots of coincidences. 
 License: GPL-2 | GPL-3
@@ -23,4 +23,3 @@ URL: https://modesto-escobar.github.io/netCoin/
 Encoding: UTF-8
 BugReports: https://github.com/Modesto-Escobar/netCoin/issues
 Acknowledgments: Grants CSO2013-49278-EXP, PGC2018-093755-B100, PDC2022-133355-100, PID2023-147358NB-100 funded by MICIU/AEI/10.13039/501100011033 and by “European Union NextGenerationEU/PRTR”.
-Config/roxygen2/version: 8.1.0
