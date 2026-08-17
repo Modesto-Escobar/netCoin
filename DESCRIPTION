@@ -7,7 +7,7 @@ Description: Combines the data analysis capabilities of R with the interactive v
 License: GPL-2 | GPL-3
 Depends: R (>= 3.5.0)
 Imports: rD3plot (>= 1.1.57), igraph (>= 1.0.1), Matrix (>= 1.2-4), haven (>= 1.1.0), MASS (>= 7.3), GPArotation(>= 2022.4), marginaleffects, methods, nnet
-Suggests: knitr, rmarkdown, lavaan, shiny, htmltools, openxlsx, data.table, readr, tidyLPA
+Suggests: knitr, rmarkdown, lavaan, shiny, htmltools, openxlsx, data.table, readr, tidyLPA, clue
 VignetteBuilder: knitr
 NeedsCompilation: no
 Authors@R: c( 
