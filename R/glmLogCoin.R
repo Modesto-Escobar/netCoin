@@ -29,6 +29,7 @@ glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
   }
 
   prenet <- contr.gw(formulas, data=data, weights=weights, vcov=vcov, .keep_models=TRUE)
+  coeffs <- eqCoefs(prenet$models)   # same order as 'equations': indexed positionally
   equations <- eqSummary(prenet$models, formulas)
   arguments <- list(nodes = prenet$Nodes, links = prenet$Links,
     showArrows=showArrows, color=color, linkFilter=paste0("p.value<",pmax),
@@ -57,20 +58,35 @@ glmCoin <- function(formulas, data, weights=NULL, pmax=.05,
       }
       return(x)
     }
-    if(!is.null(arguments$nodes)) arguments$nodes[,'name'] <- restoreNames(arguments$nodes[,'name'])
+    if(!is.null(arguments$nodes)){
+      arguments$nodes[,'name'] <- restoreNames(arguments$nodes[,'name'])
+      if('variable' %in% colnames(arguments$nodes)) # else the legend, marginsTable
+        arguments$nodes[,'variable'] <- restoreNames(arguments$nodes[,'variable'])
+    }
     if(!is.null(arguments$links) && nrow(arguments$links)){
       arguments$links[,'Source'] <- restoreNames(arguments$links[,'Source'])
       arguments$links[,'Target'] <- restoreNames(arguments$links[,'Target'])
       arguments$links[,'Model'] <- restoreFormulas(arguments$links[,'Model'])
     }
     if(!is.null(equations)) equations$model <- restoreFormulas(equations$model)
+    coeffs <- lapply(coeffs, function(d){
+      if(is.null(d)) return(d)
+      lat <- attr(d, "latent.sd")
+      d$Source <- restoreNames(d$Source)
+      d$Target <- restoreNames(d$Target)
+      if(!is.null(lat)) names(lat) <- restoreNames(names(lat))
+      attr(d, "latent.sd") <- lat
+      d
+    })
   }
   if(arguments$language[1]!="en"){
     colnames(arguments$nodes)[colnames(arguments$nodes)=="name"] <- getByLanguage(nameList,arguments$language[1])
   }
   net <- do.call(netCoin, arguments)
   net$equations <- equations
-  if(igraph) net <- igraph::set_graph_attr(toIgraph(net), "equations", equations)
+  net$coeffs <- coeffs
+  if(igraph) net <- igraph::set_graph_attr(
+    igraph::set_graph_attr(toIgraph(net), "equations", equations), "coeffs", coeffs)
   return(net)
 }
 
@@ -126,6 +142,160 @@ eqSummary <- function(models, spec){
   })
   do.call(rbind, rows)
 }
+
+## Coefficients per equation for glmCoin ----
+## One data.frame per equation, in the same order as eqSummary()'s rows, so that
+## coefTable() indexes them positionally and never matches model strings
+## (links$Model keeps the family suffix, equations$model does not).
+##
+## Columns: Target, term, Source, factor, estimate, std.error, statistic,
+##          p.value, conf.low, conf.high, sd.x
+## Attributes: family, link, sd.y (NA unless the response is on its own scale)
+##          and latent.sd (per Target; NA unless the link has a latent variable).
+##
+## What is stored is descriptive; the standardization policy lives in
+## coefTable(), which is the layer that decides what to show.
+eqCoefs <- function(models, level = .95){
+  out <- lapply(seq_along(models), function(i)
+    tryCatch(.modelCoefs(models[[i]], level = level),
+             error = function(e){
+               warning("coefficients not available for equation '", names(models)[i],
+                       "': ", conditionMessage(e), call. = FALSE)
+               NULL
+             }))
+  names(out) <- names(models)
+  out
+}
+
+## glm names a dummy 'sexoMujer'; the network calls that node 'sexo:Mujer'.
+## The translation needs the factor levels, alive here and gone afterwards:
+## this is the one piece that cannot be rebuilt from the returned object.
+.coefSource <- function(nm, term, xlev){
+  if (identical(term, "(Intercept)")) return("(Intercept)")
+  vars <- strsplit(term, ":", fixed = TRUE)[[1]]
+  rest <- nm
+  levs <- character(0)
+  for (v in vars) {
+    if (v %in% names(xlev)) {
+      cand <- xlev[[v]][vapply(xlev[[v]], function(L)
+        startsWith(rest, paste0(v, L)), NA)]
+      if (!length(cand)) return(nm)                # unexpected contrast coding
+      L <- cand[which.max(nchar(cand))]            # longest level wins
+      levs <- c(levs, L)
+      rest <- substring(rest, nchar(v) + nchar(L) + 1L)
+    } else {
+      if (!startsWith(rest, v)) return(nm)
+      rest <- substring(rest, nchar(v) + 1L)
+    }
+    if (startsWith(rest, ":")) rest <- substring(rest, 2L)
+  }
+  if (!length(levs)) return(term)                  # every variable numeric
+  paste0(paste(vars, collapse = "*"), ":", paste(levs, collapse = "*"))
+}
+
+## Response label: binomial predicts the second level, so the node is 'y:level'.
+.coefTarget <- function(m, mf, target){
+  fam <- if (!is.null(m$family)) m$family$family else ""
+  if (!inherits(m, "glm") || !grepl("binomial", fam, fixed = TRUE)) return(target)
+  y <- if (target %in% names(mf)) mf[[target]] else NULL
+  pos <- if (is.factor(y)) levels(y)[2L]
+         else if (is.logical(y)) "TRUE"
+         else if (is.numeric(y)) as.character(sort(unique(stats::na.omit(y)))[2L])
+         else NA_character_
+  if (is.na(pos) || !nzchar(pos)) target else paste0(target, ":", pos)
+}
+
+.modelCoefs <- function(m, level = .95){
+  mf  <- stats::model.frame(m)
+  trm <- stats::terms(m)
+  w   <- stats::model.weights(mf)
+  if (is.null(w) || length(w) != nrow(mf)) w <- rep(1, nrow(mf))
+  wmean <- function(x) sum(w * x) / sum(w)
+  wvar  <- function(x) sum(w * (x - wmean(x))^2) / sum(w)
+  xlev   <- if (!is.null(m$xlevels)) m$xlevels else list()
+  target <- as.character(stats::formula(m))[2L]
+  mm <- tryCatch(stats::model.matrix(m),                    # no method for multinom
+                 error = function(e)
+                   stats::model.matrix(stats::delete.response(trm), data = mf))
+  asg    <- attr(mm, "assign")
+  tlab   <- stats::setNames(c("(Intercept)", attr(trm, "term.labels"))[asg + 1L],
+                            colnames(mm))
+  isMult <- inherits(m, "multinom")
+
+  ## --- estimates: multinom yields one row of coefficients per category -----
+  if (isMult) {
+    cf <- stats::coef(m)
+    se <- summary(m)$standard.errors
+    if (is.null(dim(cf))) {                                 # binary response
+      nmv <- names(cf)
+      cf <- matrix(cf, 1L, dimnames = list(m$lev[2L], nmv))
+      se <- matrix(se, 1L, dimnames = list(m$lev[2L], nmv))
+    }
+    terms_ <- rep(colnames(cf), times = nrow(cf))
+    tg     <- paste0(target, ":", rep(rownames(cf), each = ncol(cf)))
+    est    <- as.vector(t(cf))
+    sde    <- as.vector(t(se))
+    dfres  <- Inf
+  } else {
+    s      <- stats::coef(summary(m))
+    terms_ <- rownames(s)
+    est    <- unname(s[, 1L])
+    sde    <- unname(s[, 2L])
+    dfres  <- if (grepl("^t", colnames(s)[3L])) stats::df.residual(m) else Inf
+    tg     <- rep(.coefTarget(m, mf, target), length(est))
+  }
+  if (is.null(dfres) || is.na(dfres)) dfres <- Inf
+  stat <- est / sde
+  crit <- stats::qt(1 - (1 - level) / 2, df = dfres)
+
+  ## --- node names and weighted dispersion of each model-matrix column ------
+  src   <- vapply(colnames(mm), function(nm) .coefSource(nm, tlab[[nm]], xlev), "")
+  isFac <- vapply(colnames(mm), function(nm)
+    any(strsplit(tlab[[nm]], ":", fixed = TRUE)[[1]] %in% names(xlev)), NA)
+  sdcol <- apply(mm, 2L, function(x) sqrt(wvar(x)))
+  i     <- match(terms_, colnames(mm))
+  isInt <- terms_ == "(Intercept)"
+
+  d <- data.frame(
+    Target    = tg,
+    term      = terms_,
+    Source    = ifelse(is.na(i), terms_, unname(src[i])),
+    factor    = !is.na(i) & unname(isFac[i]) & !isInt,
+    estimate  = est,
+    std.error = sde,
+    statistic = stat,
+    p.value   = 2 * stats::pt(-abs(stat), df = dfres),
+    conf.low  = est - crit * sde,
+    conf.high = est + crit * sde,
+    sd.x      = ifelse(isInt | is.na(i), NA_real_, unname(sdcol[i])),
+    stringsAsFactors = FALSE, row.names = NULL)
+
+  ## --- scale attributes: the raw material of any standardization ----------
+  fam  <- if (isMult) "multinomial" else if (!is.null(m$family)) m$family$family else "gaussian"
+  link <- if (isMult) "logit" else if (!is.null(m$family)) m$family$link else "identity"
+  y    <- stats::model.response(mf)
+  attr(d, "family") <- fam
+  attr(d, "link")   <- link
+  attr(d, "sd.y")   <- if (!isMult && identical(link, "identity") && is.numeric(y))
+                         sqrt(wvar(y)) else NA_real_
+  ## Long's latent scale: sd(y*) = sqrt(var(xb) + var(link error)).
+  ev  <- switch(link, logit = pi^2 / 3, probit = 1, NA_real_)
+  utg <- unique(tg)
+  lat <- stats::setNames(rep(NA_real_, length(utg)), utg)
+  if (!is.na(ev)) {
+    if (isMult) {
+      xb <- mm[, colnames(cf), drop = FALSE] %*% t(cf)
+      for (g in seq_len(ncol(xb)))
+        lat[paste0(target, ":", colnames(xb)[g])] <- sqrt(wvar(xb[, g]) + ev)
+    } else {
+      xb <- stats::predict(m, type = "link")
+      lat[] <- sqrt(wvar(as.vector(xb)) + ev)
+    }
+  }
+  attr(d, "latent.sd") <- lat
+  d
+}
+
 
 
 ## logCoin() ----
