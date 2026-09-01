@@ -127,8 +127,15 @@ caring_create_graphs <- function(data, arguments){
   }
   if("surScat" %in% plots){
     scatArgs <- arguments[intersect(names(arguments),union(formalArgs("surScat"),formalArgs("netCoin")))]
+    if(!is.null(scatArgs[['patterns']])){
+      scatArgs[['vPatterns']] <- scatArgs[['patterns']]
+      scatArgs[['patterns']] <- TRUE
+    }
     if(!length(scatArgs[['nclusters']])){
       scatArgs[['nclusters']] <- min(nrow(data)-1,6):2
+    }
+    if(length(scatArgs[['type']]) && scatArgs[['type']]==""){
+      scatArgs[['type']] <- NULL
     }
     scatArgs[['degreeFilter']] <- NULL
     net2 <- do.call(surScat,scatArgs)
@@ -200,20 +207,23 @@ caring_create_graphs <- function(data, arguments){
         newvar <- gsub(" ","",paste0(dic,":",value))
         glmArgs[['data']][,newvar] <- ifelse(glmArgs[['data']][,dic]==value, 1, 0)
         glmArgs[['data']][,dic] <- NULL
-        family[initialvariables==dic] <- "binomial"
         finalvariables[initialvariables==dic] <- newvar
       }
     }
 
     initialchaine <- chaine
     if(!is.null(textvariables)){
-      for(dic in textvariables){
+      textfamilies <- vapply(textvariables,function(dic){
+        return(family[initialvariables==dic])
+      },character(1))
+      for(i in seq_along(textvariables)){
+        dic <- textvariables[i]
         values <- unique(glmArgs[['data']][,dic])
         for(value in values){
           newvar <- gsub(" ","",paste0(dic,":",value))
           glmArgs[['data']][,newvar] <- ifelse(glmArgs[['data']][,dic]==value, 1, 0)
           chaine <- c(chaine,initialchaine[initialvariables==dic])
-          family <- c(family,"binomial")
+          family <- c(family,textfamilies[i])
           finalvariables <- c(finalvariables,newvar)
         }
         keep <- finalvariables!=dic

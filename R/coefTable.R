@@ -218,8 +218,8 @@ coefTable <- function(G,
   ## se muestra una sola vez, bajo la primera de sus columnas.
   firstEq <- !duplicated(paste(idx$g, idx$eq))
   for (f in footer) {
-    row <- if (identical(f, "ref")) ifelse(is.na(ref), "—", labels[ref])
-    else if (identical(f, "dr2")) ifelse(is.na(ref), "—", sprintf("%+.3f", r2 - r2[ref]))
+    row <- if (identical(f, "ref")) ifelse(is.na(ref), "\u2014", labels[ref])
+    else if (identical(f, "dr2")) ifelse(is.na(ref), "\u2014", sprintf("%+.3f", r2 - r2[ref]))
     else {
       v <- if (identical(f, "k")) vapply(srcOf, length, 1L) else eqval(f)
       vapply(seq_len(nb), function(j) fmtVal(f, v[j]), "")

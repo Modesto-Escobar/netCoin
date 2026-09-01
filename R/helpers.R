@@ -39,7 +39,7 @@ names(casesList) <- languages
 meanList <- c('mean','media','mitjana')
 names(meanList) <- languages
 
-positionList <- c('POSITION','POSICIÓN','POSICIÓ')
+positionList <- c('POSITION','POSICI\uD3N','POSICI\uD3')
 names(positionList) <- languages
 
 ## allnet, coin, layout, netcoin-core, netcorr, path, regression, surcoin

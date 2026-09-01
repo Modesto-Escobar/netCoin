@@ -11,4 +11,3 @@ vignettes/pkgdown
 ^\.positai$
 ^\.claude$
 ^U\.Rdata$
-^examples_clustering_external\.R$
