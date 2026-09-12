@@ -208,6 +208,10 @@ addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL, axesLabel
 
   scatObj$layouts <- layouts
 
+  # The centroids the object already held (if any) are recomputed on every plane, the new
+  # one included, so that $clusters covers every plane $layouts does.
+  scatObj$clusters <- currentClusters(scatObj)
+
   # The labels of the axes belong to the object, not to each plane, so once there is more
   # than one plane no pair of names can describe them all: those of the plane drawn first
   # would be read over every other one, saying "PC1 (73.0%)" above coordinates that are

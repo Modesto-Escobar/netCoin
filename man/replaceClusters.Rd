@@ -35,6 +35,10 @@ NULL adds them all.}
 The columns to remove are the ones surScat and \code{\link{addClusters}} recorded as holding
 clusterizations, so variables of the study are never removed, whatever they are named. Objects
 built before this was recorded fall back to the name of the column surScat creates.
+
+The entries of \code{$clusters} (see \link{surScat} and \link{addClusters}) belonging to the
+removed clusterizations are dropped along with their columns, and the new clusterization gets
+an entry of its own, its groups' centroids computed on every plane the object holds.
 }
 \author{
 Modesto Escobar, Department of Sociology and Communication, University of Salamanca.

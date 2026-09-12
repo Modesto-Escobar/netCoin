@@ -62,6 +62,12 @@ Compute the coordinates on the node table of the object, which is that sample, o
 
 The labels of the axes belong to the graph and not to each plane, so they keep describing the
 plane that surScat drew. Naming the added planes after their axes keeps the reader oriented.
+
+Every clusterization the object already holds (see \link{surScat} and \link{addClusters}) gets,
+in \code{$clusters}, a further entry for the plane just added, named by joining the
+clusterization and the plane with a dot, as in "kmeans(3).petals", so that \code{$clusters}
+always holds one entry per clusterization-plane pair, covering the same planes as
+\code{$layouts}.
 }
 \author{
 Modesto Escobar, Department of Sociology and Communication, University of Salamanca.

@@ -66,6 +66,15 @@ its own \code{addcluster} function, plus one solution per number of groups for e
 has run. Leaving \code{which} empty brings all of them in, whereas \code{which} picks a single one.
 The 'looking4clusters' package needs not be installed: the object is read through its list
 structure.
+
+Each clusterization added gets, in \code{$clusters}, one entry per plane the object holds (see
+\link{surScat} and \link{addAxes}), named by joining the clusterization and the plane with a
+dot, as in \code{scatObj$clusters[["kmeans(3).petals"]]}; each entry is a matrix with one row
+per group and its centroid coordinates. Where surScat collapsed the cases into patterns, a
+pattern spanning several groups keeps the compound value (as in "Group: 1|Group: 2") its column
+already carries, and gets a centroid of its own rather than being folded into one of the groups
+it spans. Printing \code{$clusters}, on its own or as part of the object, only states how many
+clusterizations and planes it covers.
 }
 \author{
 Modesto Escobar, Department of Sociology and Communication, University of Salamanca.
