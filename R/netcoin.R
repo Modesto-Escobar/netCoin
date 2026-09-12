@@ -308,6 +308,18 @@ saveGhml <- function(net, file="netCoin.graphml"){
   if(!inherits(net, "netCoin")) stop("This program only works with netCoin objects")
   if(!grepl("\\.",file))file<-paste0(file,".graphml")
   graph <- toIgraph(net)
+  # graphml only understands numeric, character or logical attributes; a factor column of
+  # the node or link table (an ordered k-means group, a categorical variable...) survives
+  # toIgraph as a factor, which write_graph then rejects with "Attribute not numeric.
+  # Invalid value" instead of writing it out as the text it displays.
+  for(a in igraph::vertex_attr_names(graph)) {
+    v <- igraph::vertex_attr(graph, a)
+    if(is.factor(v)) igraph::vertex_attr(graph, a) <- as.character(v)
+  }
+  for(a in igraph::edge_attr_names(graph)) {
+    v <- igraph::edge_attr(graph, a)
+    if(is.factor(v)) igraph::edge_attr(graph, a) <- as.character(v)
+  }
   write_graph(graph, file=file, format="graphml")
 }
 
