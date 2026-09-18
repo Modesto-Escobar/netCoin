@@ -262,6 +262,69 @@ validateClusterOrder <- function(clusters, sourceData, nCases) {
 }
 
 
+## groupCentroids ----
+# The (weighted) centroid of every level of a grouping, on a single plane of coordinates.
+# coords: a two-column numeric matrix, one row per node, as held by currentLayouts.
+# group: a factor or vector of the same length, one value per node.
+# weight: NULL (plain mean) or one value per node, as settled by layoutWeights.
+groupCentroids <- function(coords, group, weight=NULL) {
+  f    <- droplevels(as.factor(group))
+  levs <- levels(f)
+  out  <- matrix(NA_real_, length(levs), ncol(coords), dimnames=list(levs, colnames(coords)))
+  for(lv in levs) {
+    i <- which(f == lv)
+    out[lv, ] <- if(is.null(weight)) colMeans(coords[i, , drop=FALSE])
+                 else colSums(coords[i, , drop=FALSE]*weight[i])/sum(weight[i])
+  }
+  out
+}
+
+
+## currentClusters ----
+# The centroid of every group of every clusterization the object holds (surScat's own k-means
+# columns, and whatever addClusters added), on every plane it holds (the one surScat drew, and
+# whatever addAxes added). A flat, named list with one entry per clusterization-plane pair, its
+# name joining the two with a dot, as in "kmeans(3).petals"; each entry is a matrix with one row
+# per group and its centroid coordinates.
+# weights: as layoutWeights takes them; NULL counts cases per pattern where the nodes are
+# patterns, so that a cluster's centroid is not skewed towards its smaller patterns.
+currentClusters <- function(scatObj, weights=NULL) {
+  cols    <- intersect(attr(scatObj, "clusterColumns"), names(scatObj$nodes))
+  layouts <- if(length(cols)) currentLayouts(scatObj) else list()
+  wl      <- if(length(cols) && length(layouts))
+               layoutWeights(scatObj, weights, nrow(scatObj$nodes), "currentClusters")
+             else list(w=NULL)
+
+  out <- list()
+  for(cl in cols) {
+    group <- scatObj$nodes[[cl]]
+    for(pl in names(layouts))
+      out[[paste0(cl, ".", pl)]] <- groupCentroids(layouts[[pl]], group, wl$w)
+  }
+  structure(out, class=c("netCoinClusters","list"), clusterizations=cols, planes=names(layouts))
+}
+
+
+## print.netCoinClusters ----
+# $clusters says how many clusterizations and planes it covers rather than dumping every
+# centroid matrix, both on its own (print(scatObj$clusters)) and as part of the whole netCoin
+# object, whose default list printing calls the print method of each of its named elements.
+print.netCoinClusters <- function(x, ...) {
+  cl <- attr(x, "clusterizations")
+  pl <- attr(x, "planes")
+  if(!length(cl) || !length(pl)) {
+    cat("<netCoin clusters>: none yet\n")
+    return(invisible(x))
+  }
+  cat("<netCoin clusters>", length(cl), if(length(cl) == 1) "clusterization" else "clusterizations",
+      "x", length(pl), if(length(pl) == 1) "plane" else "planes",
+      paste0("(", length(x), if(length(x) == 1) " set of centroids)" else " sets of centroids)"), "\n")
+  cat("Clusterizations:", paste(cl, collapse=", "), "\n")
+  cat("Planes:", paste(pl, collapse=", "), "\n")
+  invisible(x)
+}
+
+
 ## addClusters ----
 # Add one or several cluster columns to a netCoin object from surScat
 # clusters: vector, factor, data.frame of one clusterization per column, or clustering
@@ -322,6 +385,12 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
     warning("the node table already held ", nameClash(renamed, renamedTo),
             ". State name to tell them apart, or drop the previous columns to avoid ",
             "repeating a clusterization.", call.=FALSE)
+
+  # The centroids of every clusterization the object now holds, on every plane it holds,
+  # recomputed wholesale rather than patched: cheap, and immune to drift between the two.
+  # This also settles $clusters when every set above was skipped by maxGroups, and when
+  # replaceClusters calls this with nothing left to add after dropping the old columns.
+  scatObj$clusters <- currentClusters(scatObj)
 
   return(scatObj)
 }

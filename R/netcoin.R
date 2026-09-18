@@ -78,6 +78,44 @@ summary.netCoin <- function(object, ...){
 }
 
 
+## print.netCoin ----
+# A netCoin object printed as-is (there being no method for it before this one) dumped its
+# whole list structure: every row of the node table, the ntext column -one long repetitive HTML
+# string per row, built for the tooltip of every node- the whole options list, and an
+# "attr(,...)" footer of the bookkeeping attributes the object carries for itself
+# (clusterColumns, caseToPattern...). None of it reads as a summary. This replaces that dump
+# with one: how many nodes and links, which columns the node table holds (its ntext and
+# clusterization columns left out, the latter named on their own line instead), which
+# clusterizations \link{addClusters} added to \link{surScat}'s own, and which planes
+# \link{addAxes} added to the one it drew. \code{summary} (see \link{summaryNet}) covers
+# different ground: how nodes and links are distributed over their frequency/width column.
+print.netCoin <- function(x, ...) {
+  cat("<netCoin object>\n")
+
+  clusterCols <- intersect(attr(x, "clusterColumns"), names(x$nodes))
+
+  if(is.data.frame(x$nodes)) {
+    shown <- setdiff(names(x$nodes), c(x$options$nodeText, clusterCols))
+    cat("Nodes: ", nrow(x$nodes), "  (", paste(shown, collapse=", "), ")\n", sep="")
+  }
+
+  if(is.data.frame(x$links))
+    cat("Links: ", nrow(x$links), "  (", paste(names(x$links), collapse=", "), ")\n", sep="")
+  else
+    cat("Links: 0\n")
+
+  if(length(clusterCols))
+    cat("Clusterizations: ", paste(clusterCols, collapse=", "), "\n", sep="")
+
+  # currentLayouts stops on an object with no coordinates of its own, which a plain netCoin()
+  # object (as opposed to one from surScat) usually is
+  if(is.data.frame(x$nodes) && all(c("fx","fy") %in% names(x$nodes)))
+    cat("Planes: ", paste(names(currentLayouts(x)), collapse=", "), "\n", sep="")
+
+  invisible(x)
+}
+
+
 setAttrByValueKey <- function(name,item,items){
     if(is.list(item) && !is.data.frame(item)){
       checkedlist <- list()
@@ -190,16 +228,21 @@ addNetCoin <- function(x, ...){
     net <- do.call(netCoin,arguments)
 
     # netCoin builds the object anew out of its arguments, so whatever is not one of them
-    # has to be carried over: the planes addAxes added, which live in $layouts, and the
-    # attributes surScat attaches to say how the nodes stand for the cases (caseToPattern,
-    # caseWeight, sampledNodes, sampledFrom) or which columns hold clusterizations. Without
-    # this, a call meant to change a colour silently cost the object its second plane, its
-    # ability to collapse a case-level clusterization, and the guards maxN relies on.
+    # has to be carried over: the planes addAxes added, which live in $layouts, the cluster
+    # centroids on each of them, which live in $clusters, and the attributes surScat attaches
+    # to say how the nodes stand for the cases (caseToPattern, caseWeight, sampledNodes,
+    # sampledFrom) or which columns hold clusterizations. Without this, a call meant to change
+    # a colour silently cost the object its second plane, its cluster centroids, its ability
+    # to collapse a case-level clusterization, and the guards maxN relies on.
     # A caller replacing the nodes themselves is taken at its word: none of that survives a
     # node table of another length, so it is not carried over.
     if(identical(nrow(net$nodes), nrow(x$nodes))) {
-      if(is.null(arguments$layout) && length(x$layouts) && !length(net$layouts))
-        net$layouts <- x$layouts
+      if(is.null(arguments$layout)) {
+        if(length(x$layouts) && !length(net$layouts))
+          net$layouts <- x$layouts
+        if(length(x$clusters) && !length(net$clusters))
+          net$clusters <- x$clusters
+      }
       for(a in setdiff(names(attributes(x)), names(attributes(net))))
         attr(net, a) <- attr(x, a)
     }
@@ -265,6 +308,18 @@ saveGhml <- function(net, file="netCoin.graphml"){
   if(!inherits(net, "netCoin")) stop("This program only works with netCoin objects")
   if(!grepl("\\.",file))file<-paste0(file,".graphml")
   graph <- toIgraph(net)
+  # graphml only understands numeric, character or logical attributes; a factor column of
+  # the node or link table (an ordered k-means group, a categorical variable...) survives
+  # toIgraph as a factor, which write_graph then rejects with "Attribute not numeric.
+  # Invalid value" instead of writing it out as the text it displays.
+  for(a in igraph::vertex_attr_names(graph)) {
+    v <- igraph::vertex_attr(graph, a)
+    if(is.factor(v)) igraph::vertex_attr(graph, a) <- as.character(v)
+  }
+  for(a in igraph::edge_attr_names(graph)) {
+    v <- igraph::edge_attr(graph, a)
+    if(is.factor(v)) igraph::edge_attr(graph, a) <- as.character(v)
+  }
   write_graph(graph, file=file, format="graphml")
 }
 

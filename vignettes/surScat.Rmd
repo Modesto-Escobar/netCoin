@@ -48,6 +48,12 @@ The node table holds one row per case: its variables, the coordinates `fx` and `
 head(S$nodes[, c("Species", "Groups(2)", "fx", "fy")], 3)
 ```
 
+It also holds `ntext`, the HTML description behind every node's tooltip, and `name`, its identifier. Printing the object itself (`S`, or `print(S)`) does not dump the node table: it summarizes it instead, leaving out `ntext` and the k-means group columns, which are named on their own line.
+
+```{r}
+S
+```
+
 Two groups are enough to tell one species from the other two, which is as far as two groups can go:
 
 ```{r}
@@ -145,6 +151,23 @@ names(S$layouts)
 ```
 
 Each clusterization stays as it is; only the coordinates change under it, which is what makes the two planes comparable.
+
+# Cluster centroids
+
+`$clusters` holds the (weighted) centroid of every group of every clusterization the object holds, on every plane it holds: a flat list with one entry per clusterization-plane pair, its name joining the two with a dot, and one row per group.
+
+```{r}
+S$clusters
+S$clusters[["Groups(2).PC1-PC2"]]
+```
+
+Printing it, on its own or as part of the object, only says how many clusterizations and planes it covers, rather than dumping every matrix.
+
+`addAxes` extends every clusterization already there to the plane it just added, and `addClusters` computes the centroids of whatever it adds on every plane already there, so the two stay in step automatically. `kmeans(3)` was added earlier, before `petals` existed, yet its centroids are there on that plane too:
+
+```{r}
+S$clusters[["kmeans(3).petals"]]
+```
 
 # Larger data
 
