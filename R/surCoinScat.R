@@ -608,7 +608,12 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   }
   # Record which columns hold clusterizations, so that replaceClusters knows what to
   # remove without having to guess it from the column names
-  if(length(gCols)) attr(xnc, "clusterColumns") <- gCols
+  if(length(gCols)) {
+    attr(xnc, "clusterColumns") <- gCols
+    # The centroid of every k-means group, on the plane just drawn, kept under the same
+    # name currentLayouts gives that plane so that addAxes and addClusters can extend it.
+    xnc$clusters <- currentClusters(xnc)
+  }
   return(xnc)
 }
 
