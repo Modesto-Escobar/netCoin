@@ -143,9 +143,9 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
           } else warning("layout must have a coordinate per node")
         } else warning("layout must be applied to the nodes variable")
       } else {
-        if(is.character(layout)){
-          if(tolower(substr(layout,1,2))=="mc")arguments$layout<-layoutMCA(incidences)
-          else if(tolower(substr(layout,1,2))=="pc")arguments$layout<-layoutPCA(C)
+        if(is.character(layout) || is.list(layout)){
+          arguments$layout <- layoutSpecial(layout, list(mc=function() layoutMCA(incidences),
+                                                         pc=function() layoutPCA(C)))
         }
         else if(!is.null(metric)) arguments$layout<-NULL # There is metric information and not MCA or PCA
       }

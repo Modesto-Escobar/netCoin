@@ -152,6 +152,17 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
     stop("scatObj must be a netCoin object returned by surScat")
   if(missing(data) || is.null(data))
     stop("data must be the data frame the scattergram was drawn from")
+  # The methods passed in the place of data, as in addCommunities(S, c("lo", "wa")), would
+  # otherwise be read as a variable of one column and stop far away with a message about it
+  if(!is.data.frame(data) && !is.matrix(data)) {
+    if(is.character(data) && all(!is.na(data)) &&
+       all(vapply(data, function(m) !inherits(try(communityCode(m), silent=TRUE),
+                                               "try-error"), logical(1))))
+      stop("data must be the data frame the scattergram was drawn from; the methods go in ",
+           "community, as in addCommunities(scatObj, data, community=c(\"",
+           paste(data, collapse="\", \""), "\"))")
+    stop("data must be the data frame the scattergram was drawn from")
+  }
   if(length(minSize) != 1 || is.na(minSize) || minSize <= 0)
     stop("minSize must be a proportion of the cases (below 1) or a count of them (1 or more)")
   if(!is.null(maxCommunities)) {
@@ -177,7 +188,9 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
       oldseed <- get(".Random.seed", envir=globalenv())
       on.exit(assign(".Random.seed", oldseed, envir=globalenv()), add=TRUE)
     } else {
-      on.exit(rm(".Random.seed", envir=globalenv()), add=TRUE)
+      # Only set.seed creates it, and the call may stop before reaching that
+      on.exit(if(exists(".Random.seed", envir=globalenv(), inherits=FALSE))
+                rm(".Random.seed", envir=globalenv()), add=TRUE)
     }
   }
 

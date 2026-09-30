@@ -41,6 +41,7 @@ netCoin <- function(nodes = NULL, links = NULL, tree = NULL,
   color <- setAttrByValueKey("color",color,nodes)
   shape <- setAttrByValueKey("shape",shape,nodes)
   lcolor <- setAttrByValueKey("lcolor",lcolor,links)
+  layout <- layoutCompute(layout, nodes, links, name, lweight)
 
   net <- network_rd3(nodes = nodes, links = links, tree = tree,
         community = community, layout = layout,
@@ -71,6 +72,70 @@ netCoin <- function(nodes = NULL, links = NULL, tree = NULL,
   }
 
   return(net)
+}
+
+## layoutCompute ----
+# rD3plot computes a single layout from its name, but draws several planes when it is given
+# them as a list of coordinate matrices. So several names, as in layout=c("fo","fr","ka"), or
+# a list mixing names and matrices, are turned here into that list: each name is computed by
+# rD3plot itself on a bare network of the same nodes and links, so that "fo" weighs the links
+# by lweight as it would on its own, and the nodes come out in the order the final network
+# keeps. A single name or a single matrix goes through untouched.
+# Each plane is named as it was given, the layout name when it had none.
+layoutCompute <- function(layout, nodes, links, name, lweight) {
+  if(is.character(layout) && length(layout) > 1) layout <- as.list(layout)
+  if(!is.list(layout) || is.data.frame(layout)) return(layout)
+  nm <- names(layout)
+  if(is.null(nm)) nm <- rep("", length(layout))
+  for(i in seq_along(layout)) {
+    x <- layout[[i]]
+    if(is.character(x)) {
+      if(length(x) != 1 || is.na(x))
+        stop("each element of layout must be a single layout name or a coordinate matrix")
+      if(nm[i] == "") nm[i] <- x
+      # An unknown name makes rD3plot stop with a message about none of this
+      net <- tryCatch(network_rd3(nodes = nodes, links = links, name = name,
+                                  lweight = lweight, layout = x),
+                      error = function(e) NULL)
+      if(is.null(net$nodes$fx))
+        stop("\"", x, "\" is not a layout netCoin can compute", call. = FALSE)
+      layout[[i]] <- cbind(net$nodes$fx, net$nodes$fy)
+    } else if(nm[i] == "") nm[i] <- paste0("layout", i)
+    # rD3plot takes the axis labels of each plane from its column names, and the page stops
+    # loading when a plane has none, so a plane without them gets blank ones
+    if(is.matrix(layout[[i]]) && is.null(colnames(layout[[i]])))
+      colnames(layout[[i]]) <- c("", "")
+  }
+  names(layout) <- nm
+  layout
+}
+
+## layoutSpecial ----
+# Replace in layout the names only the calling function can compute, such as "pc" for the
+# principal components of the correlations in netCorr, by their coordinates. special is a
+# list of functions keyed by the two-letter code, so that only the ones asked for are run.
+# A single name comes back as a matrix, as it always did; among several, the matrix takes
+# the place of the name and keeps it as the name of the plane, and the names left over are
+# computed later by layoutCompute.
+layoutSpecial <- function(layout, special) {
+  if(!is.character(layout) && !(is.list(layout) && !is.data.frame(layout))) return(layout)
+  single <- is.character(layout) && length(layout) == 1
+  L <- as.list(layout)
+  nm <- names(L)
+  if(is.null(nm)) nm <- rep("", length(L))
+  for(i in seq_along(L)) {
+    x <- L[[i]]
+    if(is.character(x) && length(x) == 1 && !is.na(x)) {
+      code <- tolower(substr(x, 1, 2))
+      if(code %in% names(special)) {
+        if(nm[i] == "") nm[i] <- x
+        L[[i]] <- special[[code]]()
+      }
+    }
+  }
+  if(single) return(L[[1]])
+  names(L) <- nm
+  L
 }
 
 summary.netCoin <- function(object, ...){

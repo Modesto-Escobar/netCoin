@@ -47,10 +47,8 @@ allNet<-function(incidences, weight = NULL, subsample = FALSE, pairwise = FALSE,
                               directed, diagonal, sortL, decreasingL)
     for(lattr in c("lwidth","lweight","lcolor","ltext"))
       if(!is.null(arguments[[lattr]])) arguments[[lattr]]<-i.method(c_method(arguments[[lattr]]))
-    if(is.character(arguments$layout)){
-      if(tolower(substr(arguments$layout,1,2))=="mc")arguments$layout<-layoutMCA(incidences)
-      else if(tolower(substr(arguments$layout,1,2))=="pc")arguments$layout<-layoutPCA(C)
-    }
+    arguments$layout <- layoutSpecial(arguments$layout, list(mc=function() layoutMCA(incidences),
+                                                             pc=function() layoutPCA(C)))
     arguments$scenarios <- attr(C,"n")
     xNx <- do.call(netCoin,arguments)
     if (igraph) return(toIgraph(xNx))
