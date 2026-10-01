@@ -149,10 +149,20 @@ caring_create_graphs <- function(data, arguments){
     }
     scatArgs[['degreeFilter']] <- NULL
     net2 <- do.call(surScat,scatArgs)
-    if(!is.null(scatArgs[['active']])){
+    if(is.null(arguments[['fast']]) || !arguments[['fast']]){
+      fast <- FALSE
+    }else{
+      fast <- TRUE
+    }
+    if(!fast && length(scatArgs[['active']])>1 && !length(setdiff(scatArgs[['active']],arguments[['metric']]))){
       l <- l4c(net2$nodes[,scatArgs[['active']]])
       net2 <- addClusters(net2, l)
       net2 <- addAxes(net2, l)
+      if(requireNamespace("tidyLPA",quietly=TRUE) && !is.null(scatArgs[['nclusters']]) && !length(setdiff(scatArgs[['variables']],arguments[['metric']]))){
+        u <- tidyLPA::estimate_profiles(net2$nodes[,scatArgs[['active']]], scatArgs[['nclusters']], variances = "equal", covariances = "zero")
+        net2 <- addClusters(net2, u)
+        net2 <- addCommunities(net2, scatArgs[['data']][,scatArgs[['variables']]], community=c("lo", "fa", "wa", "la"))
+      }
     }
     multiArgs[[plots[which(plots=="surScat")+1]]] = net2
   }
