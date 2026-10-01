@@ -40,7 +40,7 @@ netCorr<-function(variables, weight=NULL, pairwise=FALSE,
   E<-E[E[[criteria]]>=minL & E[[criteria]]<=maxL,]
   if (!is.null(sortL)) E<-E[order((-1*decreasingL+!decreasingL)*E[[sortL]]),]
   arguments$links <- E
-  if(exists("layout", arguments) && is.character(arguments$layout) && tolower(substr(arguments$layout,1,2))=="pc") arguments$layout <- layoutPCA(R)
+  if(exists("layout", arguments)) arguments$layout <- layoutSpecial(arguments$layout, list(pc=function() layoutPCA(R)))
   xNx <- do.call(netCoin,arguments)
   if (igraph) return(toIgraph(xNx))
   else return(xNx)

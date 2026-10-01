@@ -236,9 +236,27 @@ layoutWeights <- function(x, weights, n, who) {
 ## layoutsDist ----
 # The distance between every pair of planes of a scattergram, as the dist object hclust,
 # cmdscale and the like expect.
+# nperm: how many times the rows of one plane of each pair are shuffled, which breaks every
+#     link between the nodes of the two planes and so shows what distance chance alone yields.
+#     From it come the mean distance by chance, the distance relative to it (0 the same
+#     plane, 1 no more alike than by chance) and the probability of a distance as small as the
+#     one observed if the planes had nothing to do with each other.
+# value: which of those the dist holds; the others go along as attributes of the same shape.
+# digits: decimals shown when printed. The figures themselves are kept whole.
 layoutsDist <- function(x, align=c("cloud", "procrustes", "canvas", "none"), weights=NULL,
-                        which=NULL, normalize=TRUE, who="layoutsDist") {
+                        which=NULL, normalize=TRUE, nperm=0,
+                        value=c("distance", "relative", "p", "chance"), digits=3,
+                        who="layoutsDist") {
   align <- match.arg(align)
+  value <- match.arg(value)
+  if(!is.numeric(digits) || length(digits) != 1L || is.na(digits) || digits < 0)
+    stop(who, ": digits must be a whole number, 0 or more")
+  if(!is.numeric(nperm) || length(nperm) != 1L || is.na(nperm) || nperm < 0 ||
+     nperm != round(nperm))
+    stop(who, ": nperm must be a whole number, 0 or more")
+  if(value != "distance" && nperm == 0)
+    stop(who, ": value=\"", value, "\" is worked out by shuffling the planes, so it needs",
+         " nperm; 999 is a usual choice")
   L  <- layoutList(x, which, who)
   nm <- names(L)
   k  <- length(L)
@@ -251,6 +269,7 @@ layoutsDist <- function(x, align=c("cloud", "procrustes", "canvas", "none"), wei
 
   v    <- numeric(k*(k-1)/2)
   rows <- numeric(length(v))
+  pv   <- chance <- rep(NA_real_, length(v))
   ang  <- matrix(NA_real_, k, k, dimnames=list(nm, nm))
   ref  <- matrix(NA, k, k, dimnames=list(nm, nm))
   diag(ang) <- 0
@@ -265,14 +284,49 @@ layoutsDist <- function(x, align=c("cloud", "procrustes", "canvas", "none"), wei
     v[p]    <- z
     rows[p] <- attr(z, "rows")
     if(!is.null(attr(z, "angle"))) {
-      ang[i,j] <-  attr(z, "angle")
-      ang[j,i] <- -attr(z, "angle")
+      # a rotation is undone by turning back, but a reflection is its own inverse: the line it
+      # mirrors across is the same whichever plane is laid over the other, and so is its angle
+      ang[i,j] <- attr(z, "angle")
+      ang[j,i] <- if(attr(z, "reflection")) attr(z, "angle") else -attr(z, "angle")
       ref[i,j] <- ref[j,i] <- attr(z, "reflection")
+    }
+
+    if(nperm > 0) {
+      # shuffled among the rows the observed distance was measured on, so that every
+      # permutation compares the same nodes; each weight stays with the node of the plane
+      # left in place
+      a  <- asPlane(L[[i]], nm[i], who)
+      b  <- asPlane(L[[j]], nm[j], who)
+      ok <- complete.cases(a) & complete.cases(b)
+      if(!is.null(wl$w)) ok <- ok & !is.na(wl$w)
+      a  <- a[ok, , drop=FALSE]
+      b  <- b[ok, , drop=FALSE]
+      w  <- if(is.null(wl$w)) NULL else wl$w[ok]
+      sim <- vapply(seq_len(nperm), function(r)
+               c(layoutDist(a[sample.int(nrow(a)), , drop=FALSE], b, align=align, weights=w,
+                            normalize=normalize, who=who)), 0)
+      chance[p] <- mean(sim)
+      pv[p]     <- (1 + sum(sim <= z))/(nperm + 1)
     }
   }
 
-  out <- structure(v, class="dist", Size=k, Labels=nm, Diag=FALSE, Upper=FALSE, method=align)
-  attributes(rows) <- attributes(out)
+  # every figure a dist, which hclust and cmdscale take as it is, and printed with a fixed
+  # number of decimals, as print.dist falls back on scientific notation once a p-value is small
+  asDist <- function(y, class=c("layoutsDist", "dist"))
+    structure(y, class=class, Size=k, Labels=nm, Diag=FALSE, Upper=FALSE, method=align,
+              digits=digits)
+  dists  <- list(distance=asDist(v))
+  if(nperm > 0) {
+    dists$relative <- asDist(v/chance)
+    dists$p        <- asDist(pv)
+    dists$chance   <- asDist(chance)
+  }
+  out <- dists[[value]]
+  attr(out, "value") <- value
+  for(s in setdiff(names(dists), value)) attr(out, s) <- dists[[s]]
+  if(nperm > 0) attr(out, "nperm") <- nperm
+  attributes(rows) <- attributes(asDist(0, "dist"))
+  attr(rows, "digits") <- NULL
   attr(out, "rows")      <- rows
   attr(out, "align")     <- align
   attr(out, "normalize") <- normalize
@@ -286,4 +340,198 @@ layoutsDist <- function(x, align=c("cloud", "procrustes", "canvas", "none"), wei
   if(!is.null(wl$w))
     message(who, ": weighted by ", wl$source, " (N = ", format(sum(wl$w), big.mark=""), ")")
   out
+}
+
+
+## print.layoutsDist ----
+# The lower triangle, as print.dist lays it out, with every figure given the same number of
+# decimals and never in scientific notation. digits defaults to what layoutsDist was told.
+print.layoutsDist <- function(x, digits=attr(x, "digits"), ...) {
+  if(is.null(digits)) digits <- 3
+  m   <- as.matrix(x)
+  txt <- formatC(m, format="f", digits=digits)
+  txt[is.na(m)] <- "NA"
+  txt[upper.tri(txt, diag=TRUE)] <- ""
+  txt <- txt[-1, -ncol(txt), drop=FALSE]
+  print(noquote(txt), right=TRUE)
+  invisible(x)
+}
+
+
+## planeName ----
+# The name of one plane among those available, given as its name or as its index.
+planeName <- function(to, available, who) {
+  if(length(to) != 1L || is.na(to)) stop(who, ": to must be a single name or index")
+  if(is.numeric(to)) {
+    if(to < 1 || to > length(available))
+      stop(who, ": to must be an index between 1 and ", length(available))
+    return(available[to])
+  }
+  if(!is.character(to)) stop(who, ": to must be a name or an index")
+  if(!(to %in% available))
+    stop(who, ": there is no plane called \"", to, "\". Available: ",
+         paste(available, collapse=", "))
+  to
+}
+
+
+## layoutsAlign ----
+# The planes of a scattergram laid over one another, as layoutsDist lays them to measure how
+# far apart they are, but handing back the coordinates themselves.
+# to: the plane the rest are brought to, whose units and orientation the result is read in.
+#     It is left as it was, and need not be among which.
+# gpa: with align="procrustes", rotate every plane towards the mean of them all (generalized
+#     Procrustes analysis) rather than towards to, which then only sets how the whole set is
+#     finally turned and measured. No plane is favoured over the others this way.
+# suffix: NULL replaces the planes of a netCoin object by the aligned ones; a string keeps the
+#     originals and adds the aligned ones, their names followed by it (as in "sepal'").
+# The alignment is estimated on the rows complete in every plane involved, and then applied
+# to every row of each plane, so a node missing from one plane keeps its place in the others.
+layoutsAlign <- function(x, align=c("procrustes", "cloud", "canvas", "none"), to=1, gpa=FALSE,
+                         weights=NULL, which=NULL, suffix=NULL, tol=1e-10, maxit=100,
+                         who="layoutsAlign") {
+  align <- match.arg(align)
+  if(!is.null(suffix) && (!is.character(suffix) || length(suffix) != 1L || !nzchar(suffix)))
+    stop(who, ": suffix must be a single non-empty string")
+  if(gpa && align != "procrustes")
+    stop(who, ": gpa rotates the planes, so it needs align=\"procrustes\"")
+
+  Lall <- layoutList(x, NULL, who)
+  sel  <- names(layoutList(x, which, who))
+  ref  <- planeName(to, names(Lall), who)
+  use  <- union(sel, ref)
+  L    <- setNames(lapply(use, function(nm) asPlane(Lall[[nm]], nm, who)), use)
+
+  n <- unique(vapply(L, nrow, 0L))
+  if(length(n) > 1L)
+    stop(who, ": the planes hold a different number of rows (", paste(sort(n), collapse=", "),
+         "); every one of them must hold one per node")
+  p <- unique(vapply(L, ncol, 0L))
+  if(length(p) > 1L)
+    stop(who, ": the planes hold a different number of columns (", paste(sort(p), collapse=", "),
+         "); they can only be laid over one another with the same ones")
+  wl <- layoutWeights(x, weights, n, who)
+
+  # the rows every fit is estimated on: the same for all planes, so that they are comparable
+  ok <- Reduce(`&`, lapply(L, complete.cases))
+  if(!is.null(wl$w)) ok <- ok & !is.na(wl$w)
+  if(!any(ok)) stop(who, ": no row is complete in every plane")
+  w <- if(is.null(wl$w)) NULL else wl$w[ok]
+
+  # what takes each plane to the common footing: u = ((z - center)/scale) %*% rotation, with
+  # the scale per column under canvas and one for the whole plane otherwise
+  center <- scale <- rot <- setNames(vector("list", length(use)), use)
+  for(nm in use) {
+    z <- L[[nm]][ok, , drop=FALSE]
+    if(align == "canvas") {
+      rng <- apply(z, 2, range)
+      d   <- rng[2,] - rng[1,]
+      if(any(!is.finite(d)) || any(d <= 0))
+        stop(who, ": one axis of \"", nm, "\" has no range, so it cannot be brought to the canvas")
+      center[[nm]] <- rng[1,]
+      scale[[nm]]  <- d
+    } else if(align != "none") {
+      z <- normPlane(z, w, who)
+      center[[nm]] <- attr(z, "center")
+      scale[[nm]]  <- attr(z, "scale")
+    } else {
+      center[[nm]] <- rep(0, p)
+      scale[[nm]]  <- 1
+    }
+    rot[[nm]] <- diag(p)
+  }
+  common <- function(nm, z=L[[nm]]) sweep(sweep(z, 2, center[[nm]]), 2, scale[[nm]], "/")
+
+  iter <- converged <- consensus <- NULL
+  if(align == "procrustes") {
+    Z <- lapply(setNames(use, use), function(nm) common(nm)[ok, , drop=FALSE])
+    if(!gpa) {
+      for(nm in setdiff(use, ref))
+        rot[[nm]] <- attr(procrustesRotate(Z[[nm]], Z[[ref]], w), "rotation")
+    } else {
+      # every plane turned towards the mean of them all, and the mean worked out again, until
+      # the scatter around it stops shrinking. Only the planes asked for make up the mean.
+      M    <- Z[[ref]]
+      prev <- Inf
+      converged <- FALSE
+      for(iter in seq_len(maxit)) {
+        for(nm in sel) rot[[nm]] <- attr(procrustesRotate(Z[[nm]], M, w), "rotation")
+        Y  <- lapply(sel, function(nm) Z[[nm]] %*% rot[[nm]])
+        M  <- Reduce(`+`, Y)/length(Y)
+        ss <- sum(vapply(Y, function(y) {
+                d2 <- rowSums((y - M)^2)
+                if(is.null(w)) sum(d2) else sum(d2*w)
+              }, 0))
+        if(prev - ss <= tol*max(1, ss)) { converged <- TRUE; break }
+        prev <- ss
+      }
+      if(!converged)
+        warning(who, ": the generalized Procrustes fit did not settle in ", maxit,
+                " iterations; raise maxit", call.=FALSE)
+      # the mean has no orientation of its own: the whole set is turned as one, which alters
+      # none of the fits, so that it reads like the reference plane
+      q <- attr(procrustesRotate(M, Z[[ref]], w), "rotation")
+      for(nm in sel) rot[[nm]] <- rot[[nm]] %*% q
+      consensus <- matrix(NA_real_, n, p, dimnames=list(rownames(L[[ref]]), colnames(L[[ref]])))
+      consensus[ok, ] <- M %*% q
+    }
+  }
+
+  # back to the units of the reference plane, which is thereby left just as it was
+  toRef <- function(u) sweep(sweep(u, 2, scale[[ref]], "*"), 2, center[[ref]], "+")
+  out <- lapply(setNames(sel, sel), function(nm) {
+    a <- toRef(common(nm) %*% rot[[nm]])
+    dimnames(a) <- dimnames(L[[nm]])
+    a
+  })
+  if(!is.null(consensus)) consensus <- toRef(consensus)
+
+  angle <- reflection <- NULL
+  if(align == "procrustes" && p == 2L) {
+    angle      <- vapply(rot[sel], function(r) atan2(r[2,1], r[1,1])*180/pi, 0)
+    reflection <- vapply(rot[sel], function(r) det(r) < 0, NA)
+  }
+  info <- list(align=align, to=ref, gpa=gpa, rows=sum(ok), dropped=sum(!ok),
+               center=center[sel], scale=scale[sel], rotation=rot[sel],
+               angle=angle, reflection=reflection, weights=wl$w, wSource=wl$source)
+  if(gpa) info <- c(info, list(consensus=consensus, iterations=iter, converged=converged))
+  info <- info[!vapply(info, is.null, NA)]
+
+  if(!is.null(wl$w))
+    message(who, ": weighted by ", wl$source, " (N = ", format(sum(wl$w), big.mark=""), ")")
+
+  if(!inherits(x, "netCoin")) {
+    attributes(out) <- c(attributes(out), info)
+    return(out)
+  }
+
+  # a netCoin object comes back with the aligned planes in place of the originals, the first
+  # of them also as the fx/fy it is drawn with, and the cluster centroids worked out again.
+  # With a suffix, the originals stay and each aligned plane is placed right after its own,
+  # under its name and the suffix, so that the selector offers them side by side; the
+  # reference, which only gpa moves, is not repeated.
+  lay <- currentLayouts(x)
+  if(is.null(suffix)) {
+    lay[sel] <- out
+    x$nodes$fx <- lay[[1]][,1]
+    x$nodes$fy <- lay[[1]][,2]
+  } else {
+    add   <- if(gpa) out else out[setdiff(sel, ref)]
+    asked <- paste0(names(add), suffix)
+    given <- make.unique(c(names(lay), asked))[length(lay) + seq_along(asked)]
+    if(any(given != asked))
+      warning(who, ": the object already held ", nameClash(asked[given != asked],
+              given[given != asked]), ". Choose another suffix to tell them apart.", call.=FALSE)
+    names(given) <- names(add)
+    merged <- list()
+    for(nm in names(lay)) {
+      merged[[nm]] <- lay[[nm]]
+      if(nm %in% names(add)) merged[[given[[nm]]]] <- add[[nm]]
+    }
+    lay <- merged
+  }
+  x$layouts <- lay
+  if(length(attr(x, "clusterColumns"))) x$clusters <- currentClusters(x)
+  attr(x, "alignment") <- info
+  x
 }

@@ -77,7 +77,7 @@ netCoin(nodes = NULL, links = NULL, tree = NULL,
 \item{helpOn}{Should the help be shown at the beginning?}
 \item{background}{background color or image of the graph.}
 \item{layout}{a matrix with two columns or an algorithm to elaborate the coordinates: davidson.harel
-drl("da"), circle("ci"), Force-Atlas-2("fo"), fruchterman.reingold("fr"), gem("ge"), grid("gr"), kamada.kawai("ka"), lgl("lg"), mds("md"), random("ra"), reingold.tilford("re"), star("sta"), sugiyama("sug")}
+drl("da"), circle("ci"), Force-Atlas-2("fo"), fruchterman.reingold("fr"), gem("ge"), grid("gr"), kamada.kawai("ka"), lgl("lg"), mds("md"), random("ra"), reingold.tilford("re"), star("sta"), sugiyama("sug"). Several layouts can be given as a vector of algorithm names, as in \code{c("fo", "fr", "ka")}, or as a list mixing names and matrices; each becomes a plane of the plot, named as given in the list or after its algorithm.}
 \item{limits}{vector indicating size references to display layout, must be a numeric vector of length 4: x1, y1, x2, y2.}
 \item{cex}{number indicating the amount by which plotting text should be scaled relative to the default. Default = 1.}
 \item{roundedItems}{Display items with rounded borders.}
