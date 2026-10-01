@@ -556,3 +556,26 @@ addcluster <- function(object, data, name=NULL, groupStatsBy=FALSE,
 clean_names <- function(name){
     return(gsub("[^A-Za-z0-9]","_",name))
 }
+
+print.looking4clusters <- function(x, ...){
+    cat("An object of class looking4clusters\n")
+    cat(paste0(length(x$variables)," variables across ",
+        length(x$samples)," samples\n"))
+    if(length(x$clusters)){
+        cat(paste0(length(x$clusters)," clusters added: ",
+            paste0(names(x$clusters),collapse=", "),"\n"))
+    }
+    if(length(x$reductions)){
+        cat(paste0(length(x$reductions)," dimensional reductions added: ",
+            paste0(names(x$reductions),collapse=", "),"\n"))
+    }
+}
+
+looking4clusters <- function(data, groups = NULL,
+    components = FALSE, running_all = TRUE, distance = "euclidean",
+    agglomeration = "complete", selectedk = NULL, perplex = 30,
+    maxIter = 1000, threads = NULL, force_execution = FALSE){
+    l4c(data, groups, components, running_all,
+        distance, agglomeration, selectedk,
+        perplex, maxIter, threads, force_execution)
+}
