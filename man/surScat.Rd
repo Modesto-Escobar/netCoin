@@ -11,6 +11,8 @@ A plotted factorial axis is labelled with the percentage of variance (PCA) or of
 Every node carries an HTML description, in a column named ntext which is passed to \link{netCoin} as its ntext argument, unless another ntext is stated. When cases are collapsed it describes the pattern (see patterns). Otherwise it describes the case itself: its value on each of the two axes, followed in brackets by the mean of the k-means group it belongs to on that same axis, and the number of that group (the last k-means solution, when nclusters states several). A factorial axis is described by the coordinate which is plotted, whereas an observed variable is described in its own units and with its own labels, even if its axis has been standardized.
 
 The resulting object also holds \code{$clusters}, the (weighted) centroid of every group of every k-means solution, on the plane just drawn: a flat list with one matrix per clusterization, its name joining the clusterization and the plane with a dot, as in \code{S$clusters[["Groups(2).PC1-PC2"]]}, and one row per group. \link{addAxes} extends it with an entry for every clusterization on whichever plane it adds, and \link{addClusters} with an entry on every plane the object already holds for whichever clusterization it adds, so that \code{$clusters} always holds one entry per clusterization-plane pair. Printing it, on its own or as part of the object, only states how many clusterizations and planes it covers.
+
+Further planes and clusterizations can be obtained from \link{looking4clusters} with the arguments layouts and clusters. They are added to the plane and to the k-means groups that surScat draws, never put in their place: the main plane is still the one stated by type, xaxis and yaxis, and the selector of the graph offers the others next to it. looking4clusters works on the same cases as the k-means of surScat, one row each, but on the active variables as they come: the quantitative ones unstandardized (so its "pca" differs from the PCA of surScat, which standardizes them) and the qualitative ones as a matrix of 0/1 indicators. When the nodes are patterns, its results are collapsed as \link{addAxes} and \link{addClusters} collapse them; when maxN has drawn a sample, only the cases of the nodes drawn are kept. Case weights are not taken into account by looking4clusters, whose methods accept none. Once more than one plane is held, the axes are labelled X axis and Y axis, unless axesLabels is stated, since a single pair of labels has to serve for every plane.
 }
 \value{
 This function creates a netCoin object and, if stated, a folder in the computer with an HTML document named index.html which contains the produced graph. This file can be directly opened with your browser and sent to a web server to work properly.
@@ -22,7 +24,8 @@ surScat(data, variables=names(data), active=variables, weight=NULL,
         xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nclusters=2,
         clusterOn=c("factors", "variables"), scaleClusters=NULL, nstart=25,
         nfactors=2, critFactors=0, sortClusters=TRUE, columns=NULL,
-        seed=2020, maxN=2000, ...)
+        seed=2020, maxN=2000, layouts=NULL, clusters=NULL, suffix=NULL,
+        force_execution=FALSE, ...)
 }
 \arguments{
   \item{data}{a data frame.}
@@ -49,8 +52,12 @@ Note that FALSE on factorial coordinates reproduces the behaviour of versions pr
   \item{critFactors}{when clusterOn="factors", a factor among the first nfactors is used for clustering only if its eigenvalue exceeds critFactors times the mean eigenvalue of the full factorial spectrum. This generalizes Kaiser's rule (eigenvalue above average) to MCA, whose eigenvalues are not on the same scale as PCA's: critFactors=1 reproduces the classic Kaiser criterion in (unweighted or weighted) PCA, since the mean eigenvalue of a correlation matrix is always 1, while in MCA it adapts to the actual inertia scale of the analysis. The default, 0, applies no filtering, so all nfactors factors are used. At least one factor is always used. Ignored (with a warning if set explicitly) when clusterOn="variables".}
   \item{sortClusters}{if TRUE (default), the clusters of each k-means solution are renumbered so that group 1 is the one whose (weighted) mean on the horizontal axis is the lowest, group 2 the next one, and so on. k-means numbers its clusters after its own initialization, which is arbitrary, so this is what gives a meaning to the order of the group columns, which are ordered factors. The axis it sorts on is the one actually plotted, that is, the first factor unless xaxis states an observed variable, so that the numbering always follows what the reader sees. It applies as well when clusterOn="variables". Only the numbering changes: the partition of the cases is exactly the same. FALSE keeps the numbering produced by k-means, as previous versions did for a given seed.}
   \item{columns}{order of the columns of the resulting node data frame. NULL (default) orders them as the vPatterns variables (only when vPatterns has been explicitly stated, since it defaults to every variable), the n column of pattern counts, the active variables, the remaining ones (n is placed right after the active variables instead when the vPatterns block is empty), the k-means group columns, the ntext column and the name column, after which \link{netCoin} appends the fx and fy coordinates of the scattergram. A character vector places the columns it names first, in the stated order, and keeps every remaining column behind them in the default order, so no column is ever dropped. Such a vector may also contain the reserved names _vpattern, _actives, _others and _nclusters, which are expanded, where they are stated, into the vPatterns variables, the active variables, the variables which are neither of them, and the k-means group columns respectively. A column named twice (by itself and within a block) is kept at its first position. Names which are not a column of the node data frame are ignored with a warning.}
-  \item{seed}{random seed for reproducible k-means clustering, row sampling and jitter. The RNG state of the session is restored on exit. Use NULL to avoid setting a seed.}
+  \item{seed}{random seed for reproducible k-means clustering, row sampling and jitter, and also for the methods of \link{looking4clusters} (see layouts and clusters), each of which starts from it. The RNG state of the session is restored on exit. Use NULL to avoid setting a seed.}
   \item{maxN}{maximum number of nodes to draw. A scattergram of more nodes than this, whether cases or patterns, is capped by drawing maxN of them at random, reproducibly for a given seed. The node table then holds that sample and nothing else, so a clusterization or a pair of coordinates computed on the whole data no longer lines up with it: \link{addClusters} and \link{addAxes} report the mismatch rather than guess, and the way to add either is to compute it on the node table of the resulting object. Raise maxN above the number of cases, or patterns, to keep them all.}
+  \item{layouts}{dimensionality reductions computed by \link{looking4clusters} and added as further planes: any of "pca", "tsne", "cmds" (or "mds"), "nmf" and "umap", in the order they are to be offered. TRUE asks for all of them. NULL (default) adds none. surScat draws no links, so the network layouts accepted by \link{netCoin} ("fo", "la"...) do not apply to it: they are ignored with a warning. tsne, nmf and umap need the packages Rtsne, NMF and uwot respectively; nmf only accepts non-negative data, so it suits the 0/1 indicators of qualitative variables, but not quantitative variables holding negative values. Unlike the factorial axes, those of tsne and umap have no meaning of their own: only the proximity between points can be read.}
+  \item{clusters}{clustering methods of \link{looking4clusters} whose groups are added as further columns: any of "pam", "hclust" and "kmeans". TRUE asks for "pam" and "hclust"; "kmeans" is only computed when it is stated, since surScat runs its own k-means, from nstart random starts, whereas looking4clusters starts it once. Only the numbers of groups stated by nclusters are kept, in the same order, and each column is named after its method and its number of groups, as in "pam(3)". pam and hclust need the packages fpc, cluster and dendextend. NULL (default) adds none.}
+  \item{suffix}{a string. Every plane added by layouts is also offered aligned by Procrustes rotation to the main plane, under its own name followed by this suffix, so that both its original and its aligned version can be seen (see \link{layoutsAlign}). NULL (default) adds no aligned plane.}
+  \item{force_execution}{looking4clusters leaves out pam, hclust and cmds when there are more than 5000 cases, since they need the whole matrix of distances between them, and says so with a warning. TRUE computes them anyway.}
   \item{...}{Any \link{netCoin} argument.}
 }
 \references{
@@ -80,5 +87,29 @@ surScat(iris, active=c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Wid
         xaxis="Petal.Width", shape="Species")
 surScat(iris, active=c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width"),
         yaxis="PC3", shape="Species")
+
+# Further planes and clusterizations from looking4clusters: the PCA of the raw (not
+# standardized) variables and a UMAP, each also aligned to the main plane (suffix),
+# and the pam and hclust groups for the same numbers of groups as k-means
+\donttest{
+if(requireNamespace("uwot", quietly=TRUE) && requireNamespace("fpc", quietly=TRUE) &&
+   requireNamespace("cluster", quietly=TRUE) && requireNamespace("dendextend", quietly=TRUE)) {
+  surScat(iris, active=c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width"),
+          shape="Species", nclusters=2:3, layouts=c("pca", "umap"), clusters=TRUE,
+          suffix="'")
+}
+
+# Qualitative active variables: looking4clusters works on their 0/1 indicators,
+# which suit nmf. kmeans is only added when stated.
+data(ess)
+if(requireNamespace("Rtsne", quietly=TRUE) && requireNamespace("NMF", quietly=TRUE) &&
+   requireNamespace("fpc", quietly=TRUE) && requireNamespace("cluster", quietly=TRUE) &&
+   requireNamespace("dendextend", quietly=TRUE)) {
+  surScat(ess, variables=c("Gender", "Age", "Social participation",
+                           "Political participation"),
+          weight="cweight", patterns=TRUE, nclusters=3,
+          layouts=c("tsne", "nmf", "mds"), clusters=c("hclust", "kmeans"), suffix="*")
+}
+}
 }
 

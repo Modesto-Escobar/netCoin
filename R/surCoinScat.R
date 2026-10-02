@@ -245,10 +245,18 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 # surScat is a wrapper to build a netCoin object from an original non-dichotomized data.frame and see frequencies.
 surScat <- function(data, variables=names(data), active=variables, weight=NULL, patterns=FALSE, vPatterns=variables, jitter=0,
                      type=c("mca", "pca"), xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nclusters=2, clusterOn=c("factors", "variables"), scaleClusters=NULL, nstart=25, nfactors=2, critFactors=0,
-                     sortClusters=TRUE, columns=NULL, seed=2020, maxN=2000, ...) {
+                     sortClusters=TRUE, columns=NULL, seed=2020, maxN=2000,
+                     layouts=NULL, clusters=NULL, suffix=NULL, force_execution=FALSE, ...) {
   statedvPatterns <- !missing(vPatterns) # kept, as vPatterns itself may be modified below
   if(statedvPatterns) patterns <- TRUE # stating vPatterns implies patterns=TRUE
   clusterOn <- match.arg(clusterOn)
+  # planes and groups to be added by looking4clusters, checked before any computation
+  l4cLay  <- l4cLayout(layouts)
+  l4cMeth <- l4cClusters(clusters)
+  if(!is.null(suffix) && (!is.character(suffix) || length(suffix)!=1 || !nzchar(suffix)))
+    stop("suffix must be a single non-empty string")
+  if(!is.null(suffix) && !length(l4cLay))
+    warning("suffix aligns the planes added by layouts, and none was asked for", call.=FALSE)
   if(nfactors<1) stop("nfactors must be at least 1")
   if(length(nstart)!=1 || is.na(nstart) || nstart<1) stop("nstart must be at least 1")
   force(active); force(vPatterns) # both default to variables, which the axis variables extend below
@@ -325,6 +333,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
       stop(paste0("only ",ncol(m)-1," factors can be extracted from ",ncol(m)," categories"))
     ff <- layoutMca(m, nfactors=nExtract, rows=T, weight=weight)
     vm <- m # dichotomized active variables, for clustering on clusterOn="variables"
+    l4cData <- m # and for looking4clusters, as they are
   }
   else {
     if(length(active)<2) {
@@ -336,6 +345,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     factors <- setdiff(variables, active)
     B[, factors] <- as.data.frame(droplevels(as_factor(B[,factors, drop=FALSE])))
     B[, active]  <- b
+    l4cData <- as.matrix(b) # the active variables unstandardized, for looking4clusters
     if(nExtract > ncol(b))
       stop(paste0("only ",ncol(b)," factors can be extracted from ",ncol(b)," active variables"))
     if(is.null(weight)) {
@@ -417,6 +427,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     cm <- sweep(sweep(cm, 2, colMeans(cm)), 2, sdv, "/")
   }
   arguments <- list(...)
+  statedLabels <- !is.null(arguments$axesLabels)
   # k-means always clusters case by case (never on already-collapsed patterns), so that a
   # pattern collapsed on a subset of variables (vPatterns) can still span several groups
   groupsWord <- getByLanguage(groupsList, arguments$language)
@@ -613,6 +624,14 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     # The centroid of every k-means group, on the plane just drawn, kept under the same
     # name currentLayouts gives that plane so that addAxes and addClusters can extend it.
     xnc$clusters <- currentClusters(xnc)
+  }
+  # The planes and groups of looking4clusters are added last, so that asking for them leaves
+  # everything above as it was, the sample drawn by maxN and the jitter included
+  if(length(l4cLay) || length(l4cMeth)) {
+    found <- l4cRun(l4cData, l4cLay, l4cMeth, nclusters, seed=seed,
+                    force_execution=force_execution)
+    xnc <- addL4C(xnc, found, idx=idx, kept=kept, caseWeight=caseWeight, sort=sortClusters,
+                  suffix=suffix, axesLabels=if(statedLabels) NA)
   }
   return(xnc)
 }

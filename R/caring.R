@@ -148,16 +148,21 @@ caring_create_graphs <- function(data, arguments){
       scatArgs[['type']] <- NULL
     }
     scatArgs[['degreeFilter']] <- NULL
-    net2 <- do.call(surScat,scatArgs)
     if(is.null(arguments[['fast']]) || !arguments[['fast']]){
       fast <- FALSE
     }else{
       fast <- TRUE
     }
+    # surScat draws no links, so a network layout means nothing to it: its layout takes the
+    # dimensionality reductions of looking4clusters, computed on the cases themselves,
+    # which its argument layouts takes
+    scatArgs[['layout']] <- NULL
+    if(!fast && length(scatArgs[['active']])>1){
+      scatArgs[['layouts']] <- TRUE
+      scatArgs[['clusters']] <- TRUE
+    }
+    net2 <- do.call(surScat,scatArgs)
     if(!fast && length(scatArgs[['active']])>1 && !length(setdiff(scatArgs[['active']],arguments[['metric']]))){
-      l <- l4c(net2$nodes[,scatArgs[['active']]])
-      net2 <- addClusters(net2, l)
-      net2 <- addAxes(net2, l)
       if(requireNamespace("tidyLPA",quietly=TRUE) && !is.null(scatArgs[['nclusters']]) && !length(setdiff(scatArgs[['variables']],arguments[['metric']]))){
         u <- tidyLPA::estimate_profiles(net2$nodes[,scatArgs[['active']]], scatArgs[['nclusters']], variances = "equal", covariances = "zero")
         net2 <- addClusters(net2, u)
