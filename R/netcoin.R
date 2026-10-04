@@ -151,7 +151,8 @@ summary.netCoin <- function(object, ...){
 # (clusterColumns, caseToPattern...). None of it reads as a summary. This replaces that dump
 # with one: how many nodes and links, which columns the node table holds (its ntext and
 # clusterization columns left out, the latter named on their own line instead), which
-# clusterizations \link{addClusters} added to \link{surScat}'s own, and which planes
+# clusterizations \link{addClusters} added to \link{surScat}'s own, the number of groups
+# surScat chose when nclusters held "auto", and which planes
 # \link{addAxes} added to the one it drew. \code{summary} (see \link{summaryNet}) covers
 # different ground: how nodes and links are distributed over their frequency/width column.
 print.netCoin <- function(x, ...) {
@@ -171,6 +172,17 @@ print.netCoin <- function(x, ...) {
 
   if(length(clusterCols))
     cat("Clusterizations: ", paste(clusterCols, collapse=", "), "\n", sep="")
+
+  # the number of groups surScat chose with nclusters="auto", and where to read the index
+  kIndex <- attr(x, "clusterIndex")
+  if(is.data.frame(kIndex) && any(kIndex$optimal)) {
+    ks <- kIndex$k
+    among <- if(length(ks)>1 && all(diff(ks)==1)) paste0(min(ks), "-", max(ks)) else paste(ks, collapse=", ")
+    indexName <- attr(kIndex, "index")
+    if(is.null(indexName)) indexName <- names(kIndex)[2]
+    cat("Number of groups: ", ks[kIndex$optimal], ", by ", indexName, " among ", among,
+        "  (attr(, \"clusterIndex\"))\n", sep="")
+  }
 
   # currentLayouts stops on an object with no coordinates of its own, which a plain netCoin()
   # object (as opposed to one from surScat) usually is
@@ -308,6 +320,9 @@ addNetCoin <- function(x, ...){
         if(length(x$clusters) && !length(net$clusters))
           net$clusters <- x$clusters
       }
+      # the group means on the variables depend on the nodes alone, not on the planes
+      if(length(x$clusterMeans) && !length(net$clusterMeans))
+        net$clusterMeans <- x$clusterMeans
       for(a in setdiff(names(attributes(x)), names(attributes(net))))
         attr(net, a) <- attr(x, a)
     }

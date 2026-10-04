@@ -79,17 +79,17 @@ Modesto Escobar, Department of Sociology and Communication, University of Salama
 \examples{
 \dontrun{
 data(iris)
-S <- surScat(iris, variables=names(iris)[1:4], type="pca", nclusters=2:4)
+S <- surScat(iris, variables=names(iris)[1:4], type="pca", nclusters=2:4, clusters="hclust")
 
-R <- clusterMatch(S, "kmeans(3)")
+R <- clusterMatch(S, "Groups(3)")
 R
 attr(R, "byClass")[[1]]    # measures category by category
 attr(R, "tables")[[1]]     # the realigned confusion matrix
 attr(R, "mapping")[[1]]    # which category was matched with which
 
 # sorted by F1, and by the simplest classifications first
-clusterMatch(S, "kmeans(3)", sort="F1")
-clusterMatch(S, "kmeans(3)", sort=c("-k", "F1"))
+clusterMatch(S, "Groups(3)", sort="F1")
+clusterMatch(S, "Groups(3)", sort=c("-k", "F1"))
 
 # with an outside vector rather than a node column
 clusterMatch(S, iris$Species)

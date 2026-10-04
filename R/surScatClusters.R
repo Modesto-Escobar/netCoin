@@ -262,19 +262,66 @@ validateClusterOrder <- function(clusters, sourceData, nCases) {
 }
 
 
-## groupCentroids ----
-# The (weighted) centroid of every level of a grouping, on a single plane of coordinates.
-# coords: a two-column numeric matrix, one row per node, as held by currentLayouts.
-# group: a factor or vector of the same length, one value per node.
-# weight: NULL (plain mean) or one value per node, as settled by layoutWeights.
-groupCentroids <- function(coords, group, weight=NULL) {
-  f    <- droplevels(as.factor(group))
-  levs <- levels(f)
-  out  <- matrix(NA_real_, length(levs), ncol(coords), dimnames=list(levs, colnames(coords)))
-  for(lv in levs) {
-    i <- which(f == lv)
-    out[lv, ] <- if(is.null(weight)) colMeans(coords[i, , drop=FALSE])
-                 else colSums(coords[i, , drop=FALSE]*weight[i])/sum(weight[i])
+## clusterShares ----
+# How many cases (or how much case weight) of every group every node holds: a matrix with one
+# row per node and one column per group, named by its label. It is what a centroid needs when
+# a node is a pattern whose cases fall in several groups.
+# node: the node of every case; group: its group label, as a factor whose levels are the
+# groups in order; w: the weight of every case, NULL counting each one.
+clusterShares <- function(node, nNodes, group, w=NULL) {
+  if(is.null(w)) w <- rep(1, length(node))
+  sh <- tapply(w, list(factor(node, levels=seq_len(nNodes)), droplevels(group)), sum)
+  sh[is.na(sh)] <- 0
+  sh <- matrix(sh, nrow(sh), ncol(sh), dimnames=list(NULL, colnames(sh)))
+  sh
+}
+
+
+## groupWeights ----
+# What every node weighs in every group of one clusterization: a matrix with one row per node
+# and one column per group, named by its label, from which every centroid and every group mean
+# is taken, so that $clusters and $clusterMeans hold their groups in the same order.
+# A pattern whose cases fall in several groups is labelled with all of them ("Group: 1|Group: 3"),
+# and it weighs in each of those groups with the cases it holds of it: the (weighted) number of
+# cases of every group in every node, which surScat and addClusters record in the attribute
+# clusterShares while they still have the groups case by case. An object lacking it (built
+# before it was recorded) counts each such pattern whole for its modal group, the first one in
+# its label.
+# w: the weight of every node, as settled by layoutWeights (NULL counts each node once);
+# stated: whether those weights were stated by the caller, who then has them spread over the
+# groups of a node in the proportion of its cases.
+groupWeights <- function(scatObj, cl, w=NULL, stated=FALSE) {
+  n  <- nrow(scatObj$nodes)
+  sh <- attr(scatObj, "clusterShares")[[cl]]
+  if(!is.null(sh) && nrow(sh) == n) {
+    if(stated && !is.null(w)) {
+      tot <- rowSums(sh)
+      sh  <- sh/ifelse(tot > 0, tot, 1)*w
+    }
+    return(sh)
+  }
+  group <- as.character(scatObj$nodes[[cl]])
+  if(any(grepl("|", group, fixed=TRUE)))
+    group <- vapply(strsplit(group, "|", fixed=TRUE), `[`, "", 1)
+  f <- droplevels(as.factor(group))
+  W <- outer(as.integer(f), seq_len(nlevels(f)), "==")*(if(is.null(w)) 1 else w)
+  W[is.na(W)] <- 0
+  dimnames(W) <- list(NULL, levels(f))
+  W
+}
+
+
+## groupMeans ----
+# The (weighted) mean of every column of X in every group, its weights in W as groupWeights
+# gives them: one row per group and one column per column of X. A node with no value in a
+# column is left out of the mean of that column only.
+groupMeans <- function(X, W) {
+  X <- as.matrix(X)
+  out <- matrix(NA_real_, ncol(W), ncol(X), dimnames=list(colnames(W), colnames(X)))
+  for(j in seq_len(ncol(X))) {
+    ok <- !is.na(X[, j])
+    sw <- colSums(W[ok, , drop=FALSE])
+    out[, j] <- ifelse(sw > 0, colSums(W[ok, , drop=FALSE]*X[ok, j])/sw, NA_real_)
   }
   out
 }
@@ -287,7 +334,8 @@ groupCentroids <- function(coords, group, weight=NULL) {
 # name joining the two with a dot, as in "kmeans(3).petals"; each entry is a matrix with one row
 # per group and its centroid coordinates.
 # weights: as layoutWeights takes them; NULL counts cases per pattern where the nodes are
-# patterns, so that a cluster's centroid is not skewed towards its smaller patterns.
+# patterns, so that a cluster's centroid is not skewed towards its smaller patterns. How a
+# pattern spanning several groups takes part in them is told under groupWeights.
 currentClusters <- function(scatObj, weights=NULL) {
   cols    <- intersect(attr(scatObj, "clusterColumns"), names(scatObj$nodes))
   layouts <- if(length(cols)) currentLayouts(scatObj) else list()
@@ -297,11 +345,47 @@ currentClusters <- function(scatObj, weights=NULL) {
 
   out <- list()
   for(cl in cols) {
-    group <- scatObj$nodes[[cl]]
+    W <- groupWeights(scatObj, cl, wl$w, stated=!is.null(weights))
     for(pl in names(layouts))
-      out[[paste0(cl, ".", pl)]] <- groupCentroids(layouts[[pl]], group, wl$w)
+      out[[paste0(cl, ".", pl)]] <- groupMeans(layouts[[pl]], W)
   }
   structure(out, class=c("netCoinClusters","list"), clusterizations=cols, planes=names(layouts))
+}
+
+
+## currentClusterMeans ----
+# The mean of every group of every clusterization on every numeric column of the node table:
+# the centroid of each group on whichever variable the graph places on an axis instead of the
+# coordinates of a plane, taken just as $clusters takes them (see groupWeights). A named list
+# with one data frame per clusterization, one row per group, in the order of the rows of its
+# entries in $clusters, and one column per variable; fx and fy are left out, since they are
+# the coordinates of the plane drawn, whose centroids $clusters holds already.
+# Since a centroid is the mean on each axis separately, any two of these columns make the
+# centroid on the plane they span, and either of them can be paired with a column of an entry
+# of $clusters as well.
+currentClusterMeans <- function(scatObj, weights=NULL) {
+  cols  <- intersect(attr(scatObj, "clusterColumns"), names(scatObj$nodes))
+  nodes <- scatObj$nodes
+  vars  <- setdiff(names(nodes)[vapply(nodes, is.numeric, NA)], c("fx", "fy"))
+  if(!length(cols) || !length(vars)) return(NULL)
+  wl <- layoutWeights(scatObj, weights, nrow(nodes), "currentClusterMeans")
+  X  <- as.matrix(nodes[, vars, drop=FALSE])
+  out <- lapply(setNames(cols, cols), function(cl) {
+    m <- groupMeans(X, groupWeights(scatObj, cl, wl$w, stated=!is.null(weights)))
+    as.data.frame(m, check.names=FALSE)
+  })
+  structure(out, class=c("netCoinClusterMeans","list"))
+}
+
+
+## print.netCoinClusterMeans ----
+# Like $clusters, $clusterMeans only states what it covers when printed.
+print.netCoinClusterMeans <- function(x, ...) {
+  vars <- unique(unlist(lapply(x, names)))
+  cat("<netCoin cluster means>", length(x), if(length(x) == 1) "clusterization" else "clusterizations",
+      "x", length(vars), if(length(vars) == 1) "variable" else "variables", "
+")
+  invisible(x)
 }
 
 
@@ -391,6 +475,7 @@ addClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, so
   # This also settles $clusters when every set above was skipped by maxGroups, and when
   # replaceClusters calls this with nothing left to add after dropping the old columns.
   scatObj$clusters <- currentClusters(scatObj)
+  scatObj$clusterMeans <- currentClusterMeans(scatObj)
 
   return(scatObj)
 }
@@ -415,6 +500,9 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
   if(length(clusters) != nrow(scatObj$nodes)) {
     idx <- attr(scatObj, "caseToPattern")
     if(!is.null(idx) && length(clusters) == length(idx)) {
+      # kept case by case, for the cases of every group in every pattern (clusterShares)
+      caseClusters <- as.character(clusters)
+      caseIdx <- idx
       # Collapse clusters to pattern level using mode (most frequent value per pattern)
       groups <- split(seq_along(idx), idx)
       collapsedClust <- character(length(groups))  # Modal cluster for sorting
@@ -493,6 +581,7 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
   lay <- scatObj[["layout"]]
   layout_first <- if(!is.null(lay) && !is.null(ncol(lay)) && ncol(lay) > 0) lay[,1]
                   else scatObj$nodes$fx
+  sortedValues <- NULL # the group values in their new order, when they are renumbered
   if(sort && !is.null(layout_first) && length(layout_first) == length(cl)) {
     # For sorting, use ALL cluster values (including non-modal), but compute mean only for modals
     # Non-modal clusters inherit the mean of their pattern's modal cluster
@@ -525,6 +614,7 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
     # Renumber clusters based on sorted order (use all_cluster_values so all values have a mapping)
     order_idx <- order(mu_all[as.character(all_cluster_values)])
     all_cluster_values_sorted <- all_cluster_values[order_idx]
+    sortedValues <- all_cluster_values_sorted
 
     # Map cl values: replace old values with new numbering
     cl_new <- rep(NA_character_, length(cl))
@@ -607,6 +697,23 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
   # Add the new cluster column
   scatObj$nodes[[name]] <- cl_factor
 
+  # The (weighted) cases of every group in every pattern, as the group of each case is known
+  # only here, for the centroids of the groups (see currentClusters)
+  if(!is.null(collapseReport)) {
+    caseNum <- if(!is.null(sortedValues)) as.character(match(caseClusters, sortedValues))
+               else caseClusters
+    nums <- unique(caseNum)
+    nums <- nums[order(as.integer(nums))]
+    caseLabel <- factor(caseNum, levels=nums,
+                        labels=vapply(nums, function(val) paste0(groupWord, ": ", shown(val)),
+                                      character(1), USE.NAMES=FALSE))
+    cw <- attr(scatObj, "caseWeight")
+    if(!is.null(cw) && length(cw) != length(caseIdx)) cw <- NULL
+    shares <- attr(scatObj, "clusterShares")
+    shares[[name]] <- clusterShares(caseIdx, nrow(scatObj$nodes), caseLabel, cw)
+    attr(scatObj, "clusterShares") <- shares
+  }
+
   # Record it as a clusterization, so that replaceClusters knows what to remove
   # without having to guess it from the column names
   attr(scatObj, "clusterColumns") <- union(attr(scatObj, "clusterColumns"), name)
@@ -642,6 +749,11 @@ replaceClusters <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL
   if(length(clusterCols) > 0) {
     scatObj$nodes[clusterCols] <- NULL
     attr(scatObj, "clusterColumns") <- setdiff(attr(scatObj, "clusterColumns"), clusterCols)
+    shares <- attr(scatObj, "clusterShares")
+    if(length(shares)) {
+      shares <- shares[setdiff(names(shares), clusterCols)]
+      attr(scatObj, "clusterShares") <- if(length(shares)) shares
+    }
   }
 
   # If name not specified, try to reuse the first removed column name. Not when several

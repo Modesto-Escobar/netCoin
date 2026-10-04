@@ -122,7 +122,7 @@ caring_create_graphs <- function(data, arguments){
       scatArgs[['vPatterns']] <- scatArgs[['patterns']]
       scatArgs[['patterns']] <- TRUE
     }
-    if(length(arguments[['nclustersMin']]) || length(arguments[['nclustersMax']]) || length(arguments[['nclustersDef']])){
+    if(length(arguments[['nclustersMin']]) || length(arguments[['nclustersMax']]) || length(arguments[['nclustersDef']]) || isTRUE(arguments[['nclustersAuto']])){
       nclusters <- NULL
       if(length(arguments[['nclustersMin']]) && length(arguments[['nclustersMax']])){
         nclusters <- seq(from=arguments[['nclustersMin']],to=arguments[['nclustersMax']])
@@ -134,7 +134,11 @@ caring_create_graphs <- function(data, arguments){
           nclusters <- arguments[['nclustersMax']]
         }
       }
-      if(length(arguments[['nclustersDef']])){
+      # "auto" as default number of groups (or nclustersAuto) lets surScat choose it within the
+      # range by clusterIndex, keeping the whole range, or that number alone when no range is set
+      if(isTRUE(arguments[['nclustersAuto']]) || identical(tolower(as.character(arguments[['nclustersDef']])),"auto")){
+        nclusters <- c("auto",nclusters)
+      }else if(length(arguments[['nclustersDef']])){
         if(length(nclusters)){
           nclusters <- nclusters[nclusters!=arguments[['nclustersDef']]]
           nclusters <- c(nclusters,arguments[['nclustersDef']])
@@ -162,12 +166,11 @@ caring_create_graphs <- function(data, arguments){
       scatArgs[['clusters']] <- TRUE
     }
     net2 <- do.call(surScat,scatArgs)
-    if(!fast && length(scatArgs[['active']])>1 && !length(setdiff(scatArgs[['active']],arguments[['metric']]))){
-      if(requireNamespace("tidyLPA",quietly=TRUE) && !is.null(scatArgs[['nclusters']]) && !length(setdiff(scatArgs[['variables']],arguments[['metric']]))){
-        u <- tidyLPA::estimate_profiles(net2$nodes[,scatArgs[['active']]], scatArgs[['nclusters']], variances = "equal", covariances = "zero")
-        net2 <- addClusters(net2, u)
-        net2 <- addCommunities(net2, scatArgs[['data']][,scatArgs[['variables']]], community=c("lo", "fa", "wa", "la"))
-      }
+    # the latent profiles (LPA) or classes (LCA) come from surScat itself, by clusters=TRUE,
+    # computed on the cases rather than on the nodes, which may be patterns or a sample
+    if(!fast && length(scatArgs[['active']])>1 && !length(setdiff(scatArgs[['active']],arguments[['metric']]))
+       && !length(setdiff(scatArgs[['variables']],arguments[['metric']]))){
+      net2 <- addCommunities(net2, scatArgs[['data']][,scatArgs[['variables']]], community=c("lo", "fa", "wa", "la"))
     }
     multiArgs[[plots[which(plots=="surScat")+1]]] = net2
   }

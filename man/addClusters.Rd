@@ -71,9 +71,13 @@ Each clusterization added gets, in \code{$clusters}, one entry per plane the obj
 \link{surScat} and \link{addAxes}), named by joining the clusterization and the plane with a
 dot, as in \code{scatObj$clusters[["kmeans(3).petals"]]}; each entry is a matrix with one row
 per group and its centroid coordinates. Where surScat collapsed the cases into patterns, a
-pattern spanning several groups keeps the compound value (as in "Group: 1|Group: 2") its column
-already carries, and gets a centroid of its own rather than being folded into one of the groups
-it spans. Printing \code{$clusters}, on its own or as part of the object, only states how many
+pattern spanning several groups keeps in its column the compound value (as in
+"Group: 1|Group: 2"), but there is still one centroid per group: the pattern takes part in the
+centroid of each group it spans with the (weighted) cases it holds of that group. These counts,
+one matrix per clusterization with a row per node and a column per group, are kept in the
+attribute "clusterShares" of the object, since the group of every case is no longer known once
+the cases are collapsed. \code{$clusterMeans} is updated as well, with the mean of every group of
+every clusterization on every numeric variable of the node table (see \link{surScat}). Printing \code{$clusters}, on its own or as part of the object, only states how many
 clusterizations and planes it covers.
 }
 \author{

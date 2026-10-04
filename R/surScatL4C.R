@@ -37,19 +37,22 @@ l4cLayout <- function(layouts) {
 
 
 ## l4cClusters ----
-# The clustering methods surScat's clusters asks for. TRUE asks for pam and hclust, the ones
-# surScat lacks; "kmeans" is only run when it is named, since surScat runs its own k-means,
-# started nstart times over, whereas looking4clusters starts it once.
+# The clustering methods surScat's clusters asks for. TRUE asks for all of them, as layouts
+# does: the k-means of looking4clusters works on the active variables as they come, so it is
+# not a copy of surScat's own, which works on the standardized factorial coordinates.
+# The latent models "lpa" and "lca" are taken here too, TRUE standing for whichever of them
+# suits the type of analysis ("latent"), which latentClusters settles once type is known.
 l4cClusters <- function(clusters) {
   if(is.null(clusters) || isFALSE(clusters)) return(character(0))
-  if(isTRUE(clusters)) return(c("pam", "hclust"))
+  if(isTRUE(clusters)) return(c(l4cMethods, "latent"))
+  known <- c(l4cMethods, "lpa", "lca")
   if(!is.character(clusters))
     stop("clusters must be TRUE, FALSE or the names of clustering methods: ",
-         paste(l4cMethods, collapse=", "))
+         paste(known, collapse=", "))
   asked <- tolower(clusters)
-  bad <- clusters[!(asked %in% l4cMethods)]
+  bad <- clusters[!(asked %in% known)]
   if(length(bad))
-    stop("clusters takes the names of clustering methods (", paste(l4cMethods, collapse=", "),
+    stop("clusters takes the names of clustering methods (", paste(known, collapse=", "),
          "), not ", paste0("\"", bad, "\"", collapse=", "))
   unique(asked)
 }
@@ -179,7 +182,10 @@ addL4C <- function(xnc, found, idx=NULL, kept=NULL, caseWeight=NULL, sort=TRUE,
   attr(xnc, "caseWeight")    <- saved$weight
   # the centroids are worked out again with the attributes the object keeps, as any later
   # addClusters or addAxes will
-  if(length(attr(xnc, "clusterColumns"))) xnc$clusters <- currentClusters(xnc)
+  if(length(attr(xnc, "clusterColumns"))) {
+    xnc$clusters <- currentClusters(xnc)
+    xnc$clusterMeans <- currentClusterMeans(xnc)
+  }
 
   if(!is.null(suffix) && length(found$axes)) # every plane, so that the drawn one is the reference
     xnc <- suppressMessages(layoutsAlign(xnc, "procrustes", to=1, suffix=suffix))

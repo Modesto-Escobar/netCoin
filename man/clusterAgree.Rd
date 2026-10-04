@@ -72,11 +72,11 @@ data(iris)
 S <- surScat(iris, variables=names(iris)[1:4], type="pca", nclusters=2:4)
 
 # every classification, whatever its number of groups
-A <- clusterAgree(S, "kmeans(3)", sort="ARI")
+A <- clusterAgree(S, "Groups(3)", sort="ARI")
 A
 attr(A, "tables")[[1]]
 
 # the most concordant on top, VI being a distance
-clusterAgree(S, "kmeans(3)", sort="-VI")
+clusterAgree(S, "Groups(3)", sort="-VI")
 }
 }

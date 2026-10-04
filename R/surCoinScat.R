@@ -246,10 +246,25 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 surScat <- function(data, variables=names(data), active=variables, weight=NULL, patterns=FALSE, vPatterns=variables, jitter=0,
                      type=c("mca", "pca"), xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nclusters=2, clusterOn=c("factors", "variables"), scaleClusters=NULL, nstart=25, nfactors=2, critFactors=0,
                      sortClusters=TRUE, columns=NULL, seed=2020, maxN=2000,
-                     layouts=NULL, clusters=NULL, suffix=NULL, force_execution=FALSE, ...) {
+                     layouts=NULL, clusters=NULL, suffix=NULL, force_execution=FALSE,
+                     clusterIndex=c("ch", "silhouette", "bic"), ...) {
   statedvPatterns <- !missing(vPatterns) # kept, as vPatterns itself may be modified below
   if(statedvPatterns) patterns <- TRUE # stating vPatterns implies patterns=TRUE
   clusterOn <- match.arg(clusterOn)
+  clusterIndex <- match.arg(tolower(clusterIndex), c("ch", "silhouette", "bic"))
+  # nclusters may hold "auto": the number of groups is then chosen by clusterIndex among the
+  # numbers stated next to it (2 to 10 when none is), and the chosen solution is the main one.
+  # Standing alone, "auto" keeps that solution only; next to a range, it keeps them all.
+  autoK <- "auto" %in% nclusters
+  ks <- suppressWarnings(as.numeric(setdiff(nclusters, "auto")))
+  if(anyNA(ks) || any(ks<1 | ks!=round(ks)))
+    stop("nclusters must hold positive whole numbers, optionally next to \"auto\"")
+  keepAllK <- !autoK || length(ks)>0
+  statedKs <- length(ks)>0
+  if(autoK && !statedKs) ks <- 2:10
+  if(autoK && !any(ks>=2)) stop("nclusters=\"auto\" needs at least one number of groups above 1")
+  if(!autoK && !length(ks)) stop("nclusters must state at least one number of groups")
+  ks <- ks[!duplicated(ks, fromLast=TRUE)] # a number stated twice keeps its last place
   # planes and groups to be added by looking4clusters, checked before any computation
   l4cLay  <- l4cLayout(layouts)
   l4cMeth <- l4cClusters(clusters)
@@ -315,10 +330,26 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   # goes through the complete-cases filter below and stays aligned with the factorial coordinates
   variables <- union(variables, na.omit(c(xAxis$variable, yAxis$variable)))
   keep <- complete.cases(data[,variables, drop=FALSE])
-  if(!is.null(weight)) {
-    keep <- keep & !is.na(weight)
-    weight <- weight[keep]
+  if(!is.null(weight)) keep <- keep & !is.na(weight)
+  # Only the cases complete over every variable are analysed, and variables defaults to every
+  # column: on a survey whose filtered questions leave many of them empty, hardly a case is
+  # left, and the analysis would fail further on with an error that says nothing of the cause.
+  # The variables missing the most are named, so that the reader knows which ones to drop.
+  if(sum(keep) < nrow(data)/2) {
+    nas <- vapply(data[, variables, drop=FALSE], function(x) sum(is.na(x)), 0)
+    nas <- sort(nas[nas > 0], decreasing=TRUE)
+    worst <- paste0(names(nas)[seq_len(min(5, length(nas)))], " (", nas[seq_len(min(5, length(nas)))], ")",
+                    collapse=", ")
+    what <- paste0(" over the ", length(variables), " variables",
+                   if(!is.null(weight) && any(is.na(weight))) " and the weight" else "",
+                   "; those with most missing values: ", worst,
+                   if(length(nas) > 5) paste0(" and ", length(nas)-5, " more") else "",
+                   ". State variables to keep only those the analysis needs.")
+    if(sum(keep) < 2)
+      stop(if(sum(keep)) "only one case is" else "no case is", " complete", what, call.=FALSE)
+    warning("only ", sum(keep), " of ", nrow(data), " cases are complete", what, call.=FALSE)
   }
+  if(!is.null(weight)) weight <- weight[keep]
   # weight is case by case only until the patterns are collapsed, where it becomes the sum
   # of each pattern, so it is kept aside here, already down to the cases of the analysis and
   # thus aligned with the case-to-pattern map. addAxes averages further coordinates with it,
@@ -364,6 +395,12 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
       vm <- std
     }
   }
+  # the latent model suits the type of analysis, which is only known now: LPA on the
+  # quantitative active variables, LCA on the qualitative ones, both as they come
+  latentM <- latentClusters(l4cMeth, type)
+  l4cMeth <- intersect(l4cMeth, l4cMethods)
+  latentData <- b
+  latentFound <- NULL
   # factors used for clustering: those among the first nfactors whose eigenvalue exceeds
   # critFactors times the mean eigenvalue of the full spectrum (generalizes Kaiser's rule to MCA)
   eig <- attr(ff, "eigenvalues")
@@ -433,23 +470,105 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   groupsWord <- getByLanguage(groupsList, arguments$language)
   groupWord  <- getByLanguage(groupList,  arguments$language)
   gCols <- character(0) # names of the k-means group columns: concatenated, not averaged/moded, when collapsing patterns
-  for(i in nclusters) {
-    # k-means only reaches a local optimum, the one its random start leads to, so it is run
-    # nstart times over and the best of those runs is kept
-    G <- stats::kmeans(cm, centers=i, nstart=nstart)
-    cl <- G$cluster
+  if(autoK) { # k-means cannot make more groups than there are distinct cases
+    nDistinct <- nrow(unique(round(cm, 8))) # cases of one pattern differ by rounding errors only
+    if(statedKs && any(ks>=nDistinct))
+      warning("nclusters: ", toString(ks[ks>=nDistinct]), " groups left out, as there are only ",
+              nDistinct, " distinct cases to cluster", call.=FALSE)
+    ks <- ks[ks<nDistinct]
+    if(!any(ks>=2)) stop("there are too few distinct cases to choose a number of groups")
+  }
+  # k-means only reaches a local optimum, the one its random start leads to, so it is run
+  # nstart times over and the best of those runs is kept
+  fits <- lapply(ks, function(i) stats::kmeans(cm, centers=i, nstart=nstart))
+  kIndex <- NULL
+  if(autoK && clusterIndex=="bic") {
+    # the BIC is that of the latent model suiting the type of analysis, which then settles the
+    # number of groups of every method; without its package, Calinski-Harabasz stands in for
+    # it, as the index of k-means closest to it (both rest on the within-group variance)
+    bicModel <- latentModel(type)
+    if(requireNamespace(latentPackage[[bicModel]], quietly=TRUE)) {
+      latentFound <- latentRun(latentData, bicModel, ks, seed=seed)
+      if(all(is.na(latentFound$bic))) {
+        warning("the BIC of ", bicModel, " could not be computed for any number of groups: ",
+                "Calinski-Harabasz is used instead", call.=FALSE)
+        clusterIndex <- "ch"
+      }
+    } else {
+      warning("clusterIndex=\"bic\" needs '", latentPackage[[bicModel]], "' to estimate ", bicModel,
+              ": Calinski-Harabasz is used instead", call.=FALSE)
+      clusterIndex <- "ch"
+    }
+  }
+  if(autoK) {
+    # The groups are judged on every active variable, whatever space k-means clustered on:
+    # standardized for pca, the 0/1 indicators of their categories for mca (where the squared
+    # distance between two cases is the number of categories they differ in). On the few
+    # factors k-means takes by default, a plane holding no clear-cut groups can be cut ever
+    # finer for an ever better index, which ends up choosing the largest number of groups
+    # weighed; judged on the whole of the active variables, a cut that only splits the plane
+    # gains nothing. The BIC of the latent models rests on the active variables as well.
+    em <- as.matrix(vm)
+    em[!is.finite(em)] <- 0 # a constant variable, which standardizing turns into NaN
+    n <- nrow(em)
+    if(clusterIndex=="silhouette") {
+      if(!requireNamespace("cluster", quietly=TRUE))
+        stop("Install 'cluster' to choose the number of groups by clusterIndex=\"silhouette\".")
+      # the silhouette needs every distance between cases, so beyond silN cases it is
+      # computed on a random sample of them, the same one for every number of groups
+      silN <- 2000
+      s <- if(n>silN) sort(sample.int(n, silN)) else seq_len(n)
+      d <- stats::dist(em[s, , drop=FALSE])
+    }
+    totSS <- sum(sweep(em, 2, colMeans(em))^2)
+    withinSS <- function(cl) # the squared distances of the cases to the centre of their group
+      sum(vapply(split(seq_len(n), cl), function(i)
+        sum(sweep(em[i, , drop=FALSE], 2, colMeans(em[i, , drop=FALSE]))^2), numeric(1)))
+    if(clusterIndex=="bic") { # the lower the better, and defined for a single group as well
+      val <- unname(latentFound$bic)
+      best <- which.min(val)
+    } else {
+      val <- vapply(seq_along(ks), function(j) {
+        k <- ks[j]
+        G <- fits[[j]]
+        if(k<2) return(NA_real_) # neither index is defined for a single group
+        if(clusterIndex=="ch") { # Calinski-Harabasz: between- over within-group variance, per df
+          W <- withinSS(G$cluster)
+          ((totSS-W)/(k-1))/(W/(n-k))
+        } else {
+          cs <- cluster::silhouette(G$cluster[s], d)
+          if(!is.matrix(cs)) NA_real_ else mean(cs[, "sil_width"])
+        }
+      }, numeric(1))
+      best <- which.max(val)
+    }
+    if(!length(best)) stop("clusterIndex could not be computed for any number of groups")
+    kIndex <- data.frame(k=ks, value=val, optimal=seq_along(ks)==best)
+    names(kIndex)[2] <- clusterIndex
+    indexName <- switch(clusterIndex, ch="Calinski-Harabasz", silhouette="silhouette",
+                        bic=paste0("BIC of ", bicModel))
+    attr(kIndex, "index") <- indexName
+    message("nclusters=\"auto\": ", ks[best], " groups, by ", indexName)
+    # the chosen solution goes last, which makes it the main one: it colors the graph
+    jOrder <- if(keepAllK) c(setdiff(seq_along(ks), best), best) else best
+  } else jOrder <- seq_along(ks)
+  ksUsed <- ks[jOrder]
+  for(j in jOrder) {
+    i  <- ks[j]
+    cl <- fits[[j]]$cluster
     if(sortClusters) { # k-means numbers its clusters by chance, which makes the order of the
       cf <- factor(cl, levels=seq_len(i)) # ordered factor below arbitrary: renumber them by their
       mu <- if(is.null(weight)) tapply(cc[,1], cf, mean) # (weighted) mean on the horizontal axis
             else tapply(seq_along(cl), cf, function(k) weighted.mean(cc[k,1], weight[k])) # as drawn,
       cl <- match(cl, order(mu)) # which is the first factor unless xaxis states an observed variable
     }
-    g <- paste0(groupsWord,"(",sprintf(paste0("%0",nchar(max(nclusters)),"d"),i),")")
+    g <- paste0(groupsWord,"(",sprintf(paste0("%0",nchar(max(ksUsed)),"d"),i),")")
     labels <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),seq_len(i)))
     B[[g]] <- factor(labels[cl], levels=labels, ordered=TRUE)
     gCols <- c(gCols, g)
   }
   idx <- NULL # will hold case-to-pattern mapping if patterns=TRUE
+  shares <- NULL # and the cases of every group in every pattern
   if(patterns) { # collapse cases sharing a vPatterns response pattern into a single node
     key <- do.call(paste, c(D[, vPatterns, drop=FALSE], sep="\r"))
     idx <- match(key, key[!duplicated(key)]) # 1..N group id, in order of first appearance
@@ -460,13 +579,17 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
       if(is.null(w)) w <- rep(1, length(x))
       ux[which.max(tapply(w, match(x, ux), sum))]
     }
+    # the (weighted) cases of every k-means group in every pattern, for the centroids of the
+    # groups, which a pattern spanning several of them takes part in with the cases of each
+    shares <- lapply(setNames(gCols, gCols), function(v) clusterShares(idx, length(groups), B[[v]], weight))
     newB <- B[!duplicated(idx), , drop=FALSE] # one row per pattern; overwritten below except for vPatterns
     for(v in setdiff(names(B), vPatterns)) {
       if(v %in% gCols) { # a collapsed pattern can span several k-means groups: keep all of them
         # order groups by their modal (most frequent) category within each pattern
         orderedGroups <- vapply(groups, function(i) {
-          gvals <- B[[v]][i]
-          # count frequency of each group within this pattern
+          # count frequency of each group within this pattern; as characters, since the
+          # table of a factor would also list, with no case, the groups the pattern lacks
+          gvals <- as.character(B[[v]][i])
           freq <- table(gvals)
           # order by frequency (descending), ties broken alphabetically
           ordered_unique <- names(freq)[order(-freq, names(freq))]
@@ -478,7 +601,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
         newB[[v]] <- vapply(groups, function(i) wmean(D[[v]][i], weight[i]), numeric(1))
       else { # nominal variable: show all categories ordered by frequency
         newB[[v]] <- vapply(groups, function(i) {
-          catvals <- B[[v]][i]
+          catvals <- as.character(B[[v]][i]) # only the categories the pattern holds
           if(is.null(weight)) {
             freq <- table(catvals)
           } else {
@@ -581,6 +704,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     kept <- sort(sample.int(nAll, maxN))
     B  <- B[kept, , drop=FALSE]
     cc <- cc[kept, , drop=FALSE]
+    if(!is.null(shares)) shares <- lapply(shares, function(sh) sh[kept, , drop=FALSE])
   }
   if(isTRUE(jitter)) jitter <- .02
   if(jitter>0) # visual spread only: clusters were computed on the exact coordinates
@@ -621,18 +745,36 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   # remove without having to guess it from the column names
   if(length(gCols)) {
     attr(xnc, "clusterColumns") <- gCols
+    if(!is.null(shares)) attr(xnc, "clusterShares") <- shares
     # The centroid of every k-means group, on the plane just drawn, kept under the same
     # name currentLayouts gives that plane so that addAxes and addClusters can extend it.
     xnc$clusters <- currentClusters(xnc)
+    # and the mean of every group on every numeric variable, for a variable placed on an axis
+    xnc$clusterMeans <- currentClusterMeans(xnc)
   }
   # The planes and groups of looking4clusters are added last, so that asking for them leaves
   # everything above as it was, the sample drawn by maxN and the jitter included
-  if(length(l4cLay) || length(l4cMeth)) {
-    found <- l4cRun(l4cData, l4cLay, l4cMeth, nclusters, seed=seed,
-                    force_execution=force_execution)
+  # and so are the classes of the latent model, which travel the same way
+  if(length(l4cLay) || length(l4cMeth) || length(latentM)) {
+    found <- if(length(l4cLay) || length(l4cMeth))
+               l4cRun(l4cData, l4cLay, l4cMeth, ksUsed, seed=seed, force_execution=force_execution)
+             else list(axes=list(), clusters=list())
+    if(length(latentM)) {
+      # the BIC of nclusters="auto" has estimated it already, for every number of groups weighed
+      if(is.null(latentFound) || clusterIndex!="bic")
+        latentFound <- latentRun(latentData, latentM, ksUsed, seed=seed)
+      lc <- latentFound$clusters[intersect(as.character(ksUsed), names(latentFound$clusters))]
+      if(length(lc)) { # named as surScat names its own columns, as in "LPA(3)"
+        names(lc) <- paste0(latentM, "(", sprintf(paste0("%0", nchar(max(ksUsed)), "d"),
+                                                  as.integer(names(lc))), ")")
+        found$clusters <- c(found$clusters, lc)
+      }
+    }
     xnc <- addL4C(xnc, found, idx=idx, kept=kept, caseWeight=caseWeight, sort=sortClusters,
                   suffix=suffix, axesLabels=if(statedLabels) NA)
   }
+  # the index behind nclusters="auto", for every number of groups it weighed
+  if(!is.null(kIndex)) attr(xnc, "clusterIndex") <- kIndex
   return(xnc)
 }
 
