@@ -315,8 +315,10 @@ addNetCoin <- function(x, ...){
     # node table of another length, so it is not carried over.
     if(identical(nrow(net$nodes), nrow(x$nodes))) {
       if(is.null(arguments$layout)) {
-        if(length(x$layouts) && !length(net$layouts))
+        if(length(x$layouts) && !length(net$layouts)) {
           net$layouts <- x$layouts
+          net <- planesAxesLabels(net) # the titles of their axes, unless a pair serves them all
+        }
         if(length(x$clusters) && !length(net$clusters))
           net$clusters <- x$clusters
       }

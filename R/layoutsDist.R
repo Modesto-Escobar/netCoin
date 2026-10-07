@@ -517,6 +517,13 @@ layoutsAlign <- function(x, align=c("procrustes", "cloud", "canvas", "none"), to
     x$nodes$fy <- lay[[1]][,2]
   } else {
     add   <- if(gpa) out else out[setdiff(sel, ref)]
+    # the titles of their axes take the suffix too, as a rotated axis is no longer the one
+    # of the original plane, nor that of the plane it was brought to
+    add   <- lapply(add, function(a) {
+      if(!is.null(colnames(a))) colnames(a) <- ifelse(nzchar(colnames(a)),
+                                                      paste0(colnames(a), suffix), "")
+      a
+    })
     asked <- paste0(names(add), suffix)
     given <- make.unique(c(names(lay), asked))[length(lay) + seq_along(asked)]
     if(any(given != asked))
@@ -531,6 +538,9 @@ layoutsAlign <- function(x, align=c("procrustes", "cloud", "canvas", "none"), to
     lay <- merged
   }
   x$layouts <- lay
+  # every plane, the aligned ones included, with the titles of its axes, unless the object
+  # states one pair for all of them
+  if(length(lay) > 1 && is.null(x$options$axesLabels)) x <- planesAxesLabels(x)
   if(length(attr(x, "clusterColumns"))) x$clusters <- currentClusters(x)
   attr(x, "alignment") <- info
   x

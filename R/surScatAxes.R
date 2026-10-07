@@ -141,8 +141,9 @@ currentLayouts <- function(scatObj) {
   first <- cbind(nodes$fx, nodes$fy)
   labs  <- scatObj$options$axesLabels
   if(length(labs) >= 2) {
-    colnames(first) <- sub(" *\\([^()]*\\) *$", "", as.character(labs[1:2]))
-    key <- paste(colnames(first), collapse="-")
+    # its columns keep the whole labels, as they become the titles of its axes
+    colnames(first) <- as.character(labs[1:2])
+    key <- paste(sub(" *\\([^()]*\\) *$", "", colnames(first)), collapse="-")
   } else {
     colnames(first) <- c("fx","fy")
     key <- "layout1"
@@ -164,11 +165,10 @@ currentLayouts <- function(scatObj) {
 # which: reduction to take from a looking4clusters object, as a name or an index. When it
 #        is left empty, every reduction held by the object is added.
 # weight: weights of the cases, used when collapsing them into patterns.
-# axesLabels: what to call the two axes now that the object holds more than one plane. The
-#        viewer keeps one pair of labels for every plane, so the ones the first plane was
-#        drawn with would be read over the added one as if they described it. They are
-#        replaced by labels saying no more than which axis is which; stating this argument
-#        puts another pair, and NA keeps whatever the object already had.
+# axesLabels: what to call the two axes now that the object holds more than one plane.
+#        NULL lets every plane keep the titles of its own axes (its column names, and the
+#        labels it was drawn with for the first one); a pair puts the same titles on every
+#        plane, and NA keeps whatever the object already had.
 addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL, axesLabels=NULL) {
   if(!inherits(scatObj, "netCoin"))
     stop("scatObj must be a netCoin object returned by surScat")
@@ -212,18 +212,32 @@ addAxes <- function(scatObj, axes, name=NULL, which=NULL, weight=NULL, axesLabel
   # one included, so that $clusters covers every plane $layouts does.
   scatObj$clusters <- currentClusters(scatObj)
 
-  # The labels of the axes belong to the object, not to each plane, so once there is more
-  # than one plane no pair of names can describe them all: those of the plane drawn first
-  # would be read over every other one, saying "PC1 (73.0%)" above coordinates that are
-  # nothing of the sort. They are replaced by labels that only tell one axis from the other,
-  # which says less but never says something false.
+  # Each plane keeps the titles of its own axes, which the viewer puts back whenever it is
+  # selected, so that "PC1 (73.0%)" is never read above coordinates that are nothing of the
+  # sort. A pair stated in axesLabels is put on every plane instead.
   if(!identical(axesLabels, NA) && length(layouts) > 1) {
-    language <- scatObj$options$language
-    if(is.null(language)) language <- "en"
-    scatObj$options$axesLabels <- if(is.null(axesLabels))
-        c(getByLanguage(xAxisList, language), getByLanguage(yAxisList, language))
-      else as.character(axesLabels)
+    scatObj$options$axesLabels <- if(!is.null(axesLabels)) as.character(axesLabels)
+    scatObj <- planesAxesLabels(scatObj)
   }
 
   return(scatObj)
+}
+
+
+## planesAxesLabels ----
+# The titles of the axes of every plane, as the viewer takes them: one pair per plane in
+# options$layoutsAxesLabels, read from the column names of the plane. The viewer puts a
+# pair stated in options$axesLabels on every plane instead, so they are only laid when
+# there is none; and it stops loading when a plane has no entry, so every plane gets one,
+# blank when its columns have no names.
+planesAxesLabels <- function(scatObj) {
+  if(!is.null(scatObj$options$axesLabels) || length(scatObj$layouts) < 2) {
+    scatObj$options$layoutsAxesLabels <- NULL
+    return(scatObj)
+  }
+  scatObj$options$layoutsAxesLabels <- lapply(scatObj$layouts, function(m) {
+    cn <- colnames(m)
+    if(length(cn) == 2) as.character(cn) else c("", "")
+  })
+  scatObj
 }

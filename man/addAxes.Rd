@@ -1,6 +1,6 @@
 \name{addAxes}
 \alias{addAxes}
-\title{Add axes to a netCoin object from surScat.}
+\title{Add axes to a netCoin object from surScat}
 \description{
 \code{addAxes} adds one or several planes of coordinates to a netCoin object from surScat,
 which the viewer then offers in a selector next to the graph.
@@ -26,11 +26,10 @@ an index. When it is left empty, every reduction held by the object is added as 
 just as the one already drawn, and collapses by the plain arithmetic mean when there were none.
 A vector of ones asks for the plain mean of a scattergram that does have weights.}
 \item{axesLabels}{what to call the two axes once the scattergram holds more than one plane.
-The labels belong to the object rather than to each plane, so the ones the first plane was
-drawn with would be read over every other one as though they described it. NULL (default)
-replaces them with labels that say no more than which axis is which ("X axis", "Y axis", in
-the language of the object). A pair of strings puts those instead, and NA keeps whatever the
-object already had.}
+NULL (default) lets every plane keep the titles of its own axes, which the viewer puts back
+whenever that plane is selected: the column names of an added plane, and the labels the first
+plane was drawn with, such as "F1 (23.5\%)". A pair of strings puts the same titles on every
+plane instead, and NA keeps whatever the object already had.}
 }
 \details{
 A scattergram drawn by surScat holds a single pair of coordinates, the one stated by its

@@ -252,18 +252,29 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   if(statedvPatterns) patterns <- TRUE # stating vPatterns implies patterns=TRUE
   clusterOn <- match.arg(clusterOn)
   clusterIndex <- match.arg(tolower(clusterIndex), c("ch", "silhouette", "bic"))
+  # when both plotted axes are observed variables rather than factorial ones, nclusters
+  # defaults to 0: the plane is drawn with no k-means groups
+  isVarAxis <- function(spec) !is.null(spec) && length(unlist(spec))>0 &&
+    as.character(unlist(spec)[1]) %in% names(data)
+  if(missing(nclusters) && isVarAxis(xaxis) && isVarAxis(yaxis)) nclusters <- 0
   # nclusters may hold "auto": the number of groups is then chosen by clusterIndex among the
   # numbers stated next to it (2 to 10 when none is), and the chosen solution is the main one.
   # Standing alone, "auto" keeps that solution only; next to a range, it keeps them all.
   autoK <- "auto" %in% nclusters
   ks <- suppressWarnings(as.numeric(setdiff(nclusters, "auto")))
-  if(anyNA(ks) || any(ks<1 | ks!=round(ks)))
-    stop("nclusters must hold positive whole numbers, optionally next to \"auto\"")
+  # nclusters=0 draws the plane alone, with no k-means groups: every case then takes the
+  # same color, unless color states a variable to color them by
+  noK <- length(ks)>0 && all(ks==0)
+  if(any(ks==0, na.rm=TRUE) && (!noK || length(ks)>1 || autoK))
+    stop("nclusters=0 asks for no groups at all, so it must stand alone")
+  if(noK) ks <- numeric(0)
+  else if(anyNA(ks) || any(ks<1 | ks!=round(ks)))
+    stop("nclusters must hold positive whole numbers, optionally next to \"auto\", or be 0")
   keepAllK <- !autoK || length(ks)>0
   statedKs <- length(ks)>0
   if(autoK && !statedKs) ks <- 2:10
   if(autoK && !any(ks>=2)) stop("nclusters=\"auto\" needs at least one number of groups above 1")
-  if(!autoK && !length(ks)) stop("nclusters must state at least one number of groups")
+  if(!autoK && !noK && !length(ks)) stop("nclusters must state at least one number of groups")
   ks <- ks[!duplicated(ks, fromLast=TRUE)] # a number stated twice keeps its last place
   # planes and groups to be added by looking4clusters, checked before any computation
   l4cLay  <- l4cLayout(layouts)
@@ -399,6 +410,11 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   # quantitative active variables, LCA on the qualitative ones, both as they come
   latentM <- latentClusters(l4cMeth, type)
   l4cMeth <- intersect(l4cMeth, l4cMethods)
+  if(noK && (length(l4cMeth) || length(latentM))) { # they take their numbers of groups from nclusters
+    warning("clusters left out: nclusters=0 states no number of groups to make", call.=FALSE)
+    l4cMeth <- character(0)
+    latentM <- character(0)
+  }
   latentData <- b
   latentFound <- NULL
   # factors used for clustering: those among the first nfactors whose eigenvalue exceeds
@@ -633,6 +649,20 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     B[[tName]] <- txt
     if(is.null(arguments$ntext)) arguments$ntext <- tName
   }
+  else if(noK) { # HTML profile of each case: where it stands on each axis, there being no group
+    num2txt <- function(x) vapply(x, function(z) format(round(z,2), trim=TRUE), character(1))
+    txt <- paste0("<b>", getByLanguage(positionList, arguments$language), ":</b><br/>")
+    for(j in 1:2) {
+      ax <- if(j==1) xAxis else yAxis
+      val <- if(is.na(ax$variable)) num2txt(cc[,j])
+             else if(is.numeric(B[[ax$variable]])) num2txt(B[[ax$variable]])
+             else as.character(B[[ax$variable]])
+      txt <- paste0(txt, "<b>", axisTitle(ax), "</b>: ", val, "<br/>")
+    }
+    tName <- make.unique(c(names(B),"ntext"))[ncol(B)+1]
+    B[[tName]] <- txt
+    if(is.null(arguments$ntext)) arguments$ntext <- tName
+  }
   else { # HTML profile of each case: the centre of its group, and where the case stands from it
     num2txt <- function(x) vapply(x, function(z) format(round(z,2), trim=TRUE), character(1))
     # the gap between a case and the centre of its group, signed so that the reader sees at a
@@ -712,7 +742,8 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
                      jitter*apply(cc, 2, function(z) diff(range(z))), "*")
   arguments$nodes <- B
   arguments$layout <- cc
-  arguments$color <- g
+  # the main k-means solution colors the cases, unless color states a variable to color them by
+  if(is.null(arguments$color) && length(gCols)) arguments$color <- g
   arguments$frequencies <- TRUE
   arguments$showAxes <- TRUE
   if(is.null(arguments$axesLabels)) # a factorial axis is labelled with its percentage of

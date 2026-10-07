@@ -54,7 +54,8 @@ them. The reference need not be among them; planes left out are kept as they wer
 \item{suffix}{only for a 'netCoin' object. NULL (default) replaces its planes by the aligned
 ones. A string keeps the original planes and places each aligned one right after its original,
 so that the selector of the viewer offers them side by side, named as the original followed by
-\code{suffix} (with \code{suffix="'"}, "sepal" gives "sepal'"). The
+\code{suffix} (with \code{suffix="'"}, "sepal" gives "sepal'"). The titles of its axes take
+the suffix too ("PC1" gives "PC1'"), as a rotated axis is no longer the original one. The
 reference plane is not added again, as it is left unchanged, except with \code{gpa=TRUE}.}
 \item{tol, maxit}{convergence tolerance and maximum number of iterations of the generalized
 Procrustes fit.}
