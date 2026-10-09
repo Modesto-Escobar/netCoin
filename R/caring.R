@@ -118,6 +118,9 @@ caring_create_graphs <- function(data, arguments){
   }
   if("surScat" %in% plots){
     scatArgs <- arguments[intersect(names(arguments),union(formalArgs("surScat"),formalArgs("netCoin")))]
+    if(!is.null(arguments[['alignedAxes']]) && arguments[['alignedAxes']]){
+      scatArgs[['suffix']] <- "*"
+    }
     if(!is.null(scatArgs[['patterns']])){
       scatArgs[['vPatterns']] <- scatArgs[['patterns']]
       scatArgs[['patterns']] <- TRUE
@@ -152,23 +155,20 @@ caring_create_graphs <- function(data, arguments){
       scatArgs[['type']] <- NULL
     }
     scatArgs[['degreeFilter']] <- NULL
-    if(is.null(arguments[['fast']]) || !arguments[['fast']]){
-      fast <- FALSE
-    }else{
-      fast <- TRUE
-    }
     # surScat draws no links, so a network layout means nothing to it: its layout takes the
     # dimensionality reductions of looking4clusters, computed on the cases themselves,
     # which its argument layouts takes
     scatArgs[['layout']] <- NULL
-    if(!fast && length(scatArgs[['active']])>1){
-      scatArgs[['layouts']] <- TRUE
+    if(length(scatArgs[['clusters']]) && "all" %in% scatArgs[['clusters']]){
       scatArgs[['clusters']] <- TRUE
+    }
+    if(length(scatArgs[['layouts']]) && "all" %in% scatArgs[['layouts']]){
+      scatArgs[['layouts']] <- TRUE
     }
     net2 <- do.call(surScat,scatArgs)
     # the latent profiles (LPA) or classes (LCA) come from surScat itself, by clusters=TRUE,
     # computed on the cases rather than on the nodes, which may be patterns or a sample
-    if(!fast && length(scatArgs[['active']])>1 && !length(setdiff(scatArgs[['active']],arguments[['metric']]))
+    if(length(scatArgs[['clusters']]) && length(scatArgs[['active']])>1 && !length(setdiff(scatArgs[['active']],arguments[['metric']]))
        && !length(setdiff(scatArgs[['variables']],arguments[['metric']]))){
       net2 <- addCommunities(net2, scatArgs[['data']][,scatArgs[['variables']]], community=c("lo", "fa", "wa", "la"))
     }
