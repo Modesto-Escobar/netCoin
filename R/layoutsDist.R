@@ -82,6 +82,26 @@ procrustesRotate <- function(a, b, weights=NULL) {
 }
 
 
+## rotatedAxisTitles ----
+# The titles of the axes of a plane once turned by the orthogonal matrix r, followed by suffix.
+# An axis titled with the percentage of variance of its factor, as in "PC1 (73.0%)", keeps one:
+# factors are uncorrelated, so the variance along the j-th rotated axis is the sum over the
+# factors of r[k,j]^2 times the variance of factor k, and the plane keeps the total of both.
+# The scaling and centring of the alignment leave those shares as they were. Titles without
+# percentages (an observed variable, tsne...) only take the suffix.
+rotatedAxisTitles <- function(cn, r, suffix="") {
+  if(is.null(cn)) return(NULL)
+  pctRe <- " *\\(([-0-9.]+)%\\) *$"
+  base  <- sub(pctRe, "", cn)
+  out   <- ifelse(nzchar(base), paste0(base, suffix), "")
+  if(length(cn) == ncol(r) && all(grepl(pctRe, cn))) {
+    pct <- as.numeric(sub(paste0(".*", pctRe), "\\1", cn))
+    out <- sprintf("%s (%.1f%%)", out, colSums(r^2*pct))
+  }
+  out
+}
+
+
 ## layoutDist ----
 # The distance between two planes of a scattergram: how far one and the same node travels
 # from one to the other, added up over the nodes and divided by how many they are.
@@ -482,6 +502,8 @@ layoutsAlign <- function(x, align=c("procrustes", "cloud", "canvas", "none"), to
   out <- lapply(setNames(sel, sel), function(nm) {
     a <- toRef(common(nm) %*% rot[[nm]])
     dimnames(a) <- dimnames(L[[nm]])
+    # a rotated axis no longer holds the variance of the factor it comes from, but its own
+    colnames(a) <- rotatedAxisTitles(colnames(a), rot[[nm]])
     a
   })
   if(!is.null(consensus)) consensus <- toRef(consensus)
@@ -518,10 +540,10 @@ layoutsAlign <- function(x, align=c("procrustes", "cloud", "canvas", "none"), to
   } else {
     add   <- if(gpa) out else out[setdiff(sel, ref)]
     # the titles of their axes take the suffix too, as a rotated axis is no longer the one
-    # of the original plane, nor that of the plane it was brought to
+    # of the original plane, nor that of the plane it was brought to. The suffix goes before
+    # the percentage of variance, which out already holds for the rotated axis
     add   <- lapply(add, function(a) {
-      if(!is.null(colnames(a))) colnames(a) <- ifelse(nzchar(colnames(a)),
-                                                      paste0(colnames(a), suffix), "")
+      colnames(a) <- rotatedAxisTitles(colnames(a), diag(ncol(a)), suffix)
       a
     })
     asked <- paste0(names(add), suffix)

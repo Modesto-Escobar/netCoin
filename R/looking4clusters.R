@@ -248,7 +248,11 @@ run_pca <- function(object){
     PCAcomponents <- prcomp(object$data, scale=FALSE)
     pca<-PCAcomponents$x[,seq_len(2)]
 
-    return(addreduction(object,pca,"pca"))
+    object <- addreduction(object,pca,"pca")
+    # percentage of the total variance held by each of the two components
+    ev <- PCAcomponents$sdev^2
+    attr(object$reductions$pca, "pctvar") <- ev[seq_len(2)]/sum(ev)*100
+    return(object)
 }
 
 ## Input Vars
@@ -290,10 +294,16 @@ run_mds <- function(object,threads=NULL){
     }
 
     # Classical Multi Dimensional Scaling (cMDS)
-    cmds <- cmdscale(distMatrix, k=2)
+    cmdsFit <- cmdscale(distMatrix, k=2, eig=TRUE)
+    cmds <- cmdsFit$points
     colnames(cmds) <- c("cMDS1","cMDS2")
 
-    return(addreduction(object,cmds,"cmds"))
+    object <- addreduction(object,cmds,"cmds")
+    # percentage of the inertia held by each of the two dimensions. The canberra distance is
+    # not euclidean, so some eigenvalues may be negative: only the positive ones are summed
+    ev <- cmdsFit$eig
+    attr(object$reductions$cmds, "pctvar") <- ev[seq_len(2)]/sum(pmax(ev,0))*100
+    return(object)
 }
 
 run_nmf <- function(object){

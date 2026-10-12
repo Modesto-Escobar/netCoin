@@ -135,6 +135,13 @@ l4cRun <- function(data, reductions, methods, nclusters, seed=NULL, force_execut
     colnames(axes$pca) <- c("cPC1", "cPC2")
     names(axes)[names(axes) == "pca"] <- "cPC"
   }
+  # the factorial axes (pca, cmds) are labelled with their percentage of variance or inertia,
+  # as surScat labels its own; the axes of tsne, nmf and umap have none
+  for(r in names(axes)) {
+    pct <- attr(axes[[r]], "pctvar")
+    if(length(pct) == 2 && all(is.finite(pct)))
+      colnames(axes[[r]]) <- sprintf("%s (%.1f%%)", colnames(axes[[r]]), pct)
+  }
 
   if(length(skipped))
     warning("with ", n, " cases, more than ", l4cMaxCases, ", ",

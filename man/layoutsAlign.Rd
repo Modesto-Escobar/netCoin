@@ -56,7 +56,11 @@ ones. A string keeps the original planes and places each aligned one right after
 so that the selector of the viewer offers them side by side, named as the original followed by
 \code{suffix} (with \code{suffix="'"}, "sepal" gives "sepal'"). The titles of its axes take
 the suffix too ("PC1" gives "PC1'"), as a rotated axis is no longer the original one. The
-reference plane is not added again, as it is left unchanged, except with \code{gpa=TRUE}.}
+reference plane is not added again, as it is left unchanged, except with \code{gpa=TRUE}.
+Whether or not a suffix is given, an axis titled with the percentage of variance of its factor,
+as in "PC1 (73.0\%)", is titled with the percentage the rotated axis holds instead ("PC1' (71.4\%)"):
+the factors being uncorrelated, it is worked out from theirs and the rotation, and the two axes
+of the plane keep the same total.}
 \item{tol, maxit}{convergence tolerance and maximum number of iterations of the generalized
 Procrustes fit.}
 \item{who}{the name errors and messages are issued under.}
