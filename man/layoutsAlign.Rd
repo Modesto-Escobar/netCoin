@@ -41,7 +41,7 @@ range, as the viewer does; \code{"none"} leaves them as they are. See
 \code{\link{layoutDist}}.}
 \item{to}{the reference plane, as its name or its index among all the planes of \code{x}. The
 first one by default, which in a scattergram from surScat is the plane it was drawn with (for
-instance "PC1-PC2"). The names are those printed under "Planes" by \code{print(x)}, or
+instance "PCA" or "MCA"). The names are those printed under "Planes" by \code{print(x)}, or
 \code{names(x$layouts)}: a reduction taken from a 'looking4clusters' object by
 \code{\link{addAxes}} keeps its own name, such as "pca" or "tsne", unless \code{name} was given
 there.}
@@ -89,7 +89,7 @@ P <- prcomp(iris[,1:4], scale.=TRUE)$x
 S <- addAxes(S, P[,3:4])
 S <- addAxes(S, as.matrix(iris[,1:2]), name="sepal")
 
-# every plane turned onto PC1-PC2, the one drawn first
+# every plane turned onto PCA, the one drawn first
 A <- layoutsAlign(S)
 A
 attr(A, "alignment")$angle

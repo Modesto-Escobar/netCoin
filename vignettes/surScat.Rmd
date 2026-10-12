@@ -158,7 +158,7 @@ Each clusterization stays as it is; only the coordinates change under it, which 
 
 ```{r}
 S$clusters
-S$clusters[["Groups(2).PC1-PC2"]]
+S$clusters[["Groups(2).PCA"]]
 ```
 
 Printing it, on its own or as part of the object, only says how many clusterizations and planes it covers, rather than dumping every matrix.

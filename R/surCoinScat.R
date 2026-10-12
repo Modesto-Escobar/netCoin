@@ -757,6 +757,10 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   if(is.null(arguments$label)) arguments$label <- ""
   if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)
   xnc <- do.call(netCoin, arguments)
+  # The plane of the first two factors is the factorial analysis itself, and is named after it
+  # ("PCA", "MCA"); any other pair keeps the name of its two axes, as in "F1-F3"
+  if(is.na(xAxis$variable) && is.na(yAxis$variable) && xAxis$factor==1 && yAxis$factor==2)
+    attr(xnc, "planeName") <- toupper(type)
   # Store case-to-pattern mapping if patterns were collapsed, for later use by addClusters.
   # A sample of the patterns is no longer described by that mapping, so it is dropped when
   # maxN has drawn one: addClusters and addAxes then report the mismatch instead of guessing

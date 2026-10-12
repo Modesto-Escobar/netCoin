@@ -129,7 +129,8 @@ alignAxes <- function(scatObj, pair, weight=NULL, label="") {
 # selector from. An object that has not been through addAxes keeps a single plane in the
 # fx/fy columns of its node table, which becomes the first entry, named after the axes it
 # was drawn with (their percentage of variance dropped, as it belongs to the label and not
-# to the name of the plane).
+# to the name of the plane), or after the analysis ("PCA", "MCA") when surScat drew its first
+# two factors.
 currentLayouts <- function(scatObj) {
   if(length(scatObj$layouts)) return(scatObj$layouts)
 
@@ -144,6 +145,7 @@ currentLayouts <- function(scatObj) {
     # its columns keep the whole labels, as they become the titles of its axes
     colnames(first) <- as.character(labs[1:2])
     key <- paste(sub(" *\\([^()]*\\) *$", "", colnames(first)), collapse="-")
+    if(!is.null(attr(scatObj, "planeName"))) key <- attr(scatObj, "planeName")
   } else {
     colnames(first) <- c("fx","fy")
     key <- "layout1"

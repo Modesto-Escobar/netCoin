@@ -327,6 +327,16 @@ addNetCoin <- function(x, ...){
         net$clusterMeans <- x$clusterMeans
       for(a in setdiff(names(attributes(x)), names(attributes(net))))
         attr(net, a) <- attr(x, a)
+      # The centroids are keyed by the labels the groups bore when they were computed. A
+      # caller who relabels a clusterization afterwards (levels(S$nodes[[cl]]) <- ...) leaves
+      # them keyed by names no node holds, and the browser, which builds the colour scale out
+      # of the nodes, can no longer match a centroid to its group's colour. Recomputing them
+      # out of the nodes as they stand, once the attributes naming the clusterizations are
+      # back, keeps both in step.
+      if(length(net$clusters) && is.null(arguments$layout))
+        net$clusters <- currentClusters(net)
+      if(length(net$clusterMeans))
+        net$clusterMeans <- currentClusterMeans(net)
     }
 
     return(net)

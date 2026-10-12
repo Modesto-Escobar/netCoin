@@ -129,6 +129,12 @@ l4cRun <- function(data, reductions, methods, nclusters, seed=NULL, force_execut
       umap = run_umap(object)))
   }
   axes <- object$reductions[intersect(reductions, names(object$reductions))]
+  # the pca of looking4clusters works on the covariances of the variables as they come, not on
+  # the standardized ones surScat's own PCA plane comes from, so its plane and axes are told apart
+  if(!is.null(axes$pca)) {
+    colnames(axes$pca) <- c("cPC1", "cPC2")
+    names(axes)[names(axes) == "pca"] <- "cPC"
+  }
 
   if(length(skipped))
     warning("with ", n, " cases, more than ", l4cMaxCases, ", ",
