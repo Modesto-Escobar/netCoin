@@ -649,56 +649,6 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
     B[[tName]] <- txt
     if(is.null(arguments$ntext)) arguments$ntext <- tName
   }
-  else if(noK) { # HTML profile of each case: where it stands on each axis, there being no group
-    num2txt <- function(x) vapply(x, function(z) format(round(z,2), trim=TRUE), character(1))
-    txt <- paste0("<b>", getByLanguage(positionList, arguments$language), ":</b><br/>")
-    for(j in 1:2) {
-      ax <- if(j==1) xAxis else yAxis
-      val <- if(is.na(ax$variable)) num2txt(cc[,j])
-             else if(is.numeric(B[[ax$variable]])) num2txt(B[[ax$variable]])
-             else as.character(B[[ax$variable]])
-      txt <- paste0(txt, "<b>", axisTitle(ax), "</b>: ", val, "<br/>")
-    }
-    tName <- make.unique(c(names(B),"ntext"))[ncol(B)+1]
-    B[[tName]] <- txt
-    if(is.null(arguments$ntext)) arguments$ntext <- tName
-  }
-  else { # HTML profile of each case: the centre of its group, and where the case stands from it
-    num2txt <- function(x) vapply(x, function(z) format(round(z,2), trim=TRUE), character(1))
-    # the gap between a case and the centre of its group, signed so that the reader sees at a
-    # glance which side of the centre the case falls on
-    signed <- function(x) paste0(ifelse(round(x,2)>=0, "+", "-"), num2txt(abs(round(x,2))))
-    positionWord <- getByLanguage(positionList, arguments$language)
-    grp    <- as.integer(B[[g]])
-    centre <- "" # where the centre of the group sits on each axis, read under the cluster
-    place  <- "" # where the case itself sits, and how far from that centre
-    for(j in 1:2) {
-      ax <- if(j==1) xAxis else yAxis
-      # a factorial axis is described by the coordinate that is plotted, whereas an observed
-      # variable keeps its own units and its own labels, whatever was done to the axis
-      num <- if(is.na(ax$variable)) cc[,j] else obs[[j]]
-      # an observed categorical axis is read by its labels, which cannot be told apart by a
-      # distance, so the gap is only spelled out where the value it applies to is a number
-      plain <- is.na(ax$variable) || is.numeric(B[[ax$variable]])
-      val <- if(is.na(ax$variable)) num2txt(cc[,j])
-             else if(plain) num2txt(B[[ax$variable]])
-             else as.character(B[[ax$variable]])
-      mu <- if(is.null(weight)) tapply(num, B[[g]], mean)
-            else tapply(seq_along(num), B[[g]], function(k) weighted.mean(num[k], weight[k]))
-      mu <- mu[grp] # the centre of the group each case belongs to
-      centre <- paste0(centre, "<b>", axisTitle(ax), "</b>: ", num2txt(mu), "<br/>")
-      # the gap is taken between the figures as they are shown, rounded, so that a reader who
-      # subtracts the two of them arrives at the very number in the parentheses
-      place  <- paste0(place, "<b>", axisTitle(ax), "</b>: ", val,
-                       if(plain) paste0(" (", signed(round(num,2)-round(mu,2)), ")") else "",
-                       "<br/>")
-    }
-    txt <- paste0("<b>CLUSTER:</b><br/><b>", g, "</b>: ", grp, "<br/>", centre,
-                  "<b>", positionWord, ":</b><br/>", place)
-    tName <- make.unique(c(names(B),"ntext"))[ncol(B)+1]
-    B[[tName]] <- txt
-    if(is.null(arguments$ntext)) arguments$ntext <- tName
-  }
   arguments$name <- nameByLanguage(NULL,arguments$language,NULL)
   if(is.character(rownames(B)))  B[[arguments$name]] <- rownames(B)
   else B[[arguments$name]] <- sprintf(paste0("%0",nchar(nrow(B)),"d"),as.numeric(rownames(B)))
@@ -714,7 +664,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   nCol <- if(patterns) nName else character(0) # follows the vPatterns block, or the active
   ord  <- c(vPat, if(statedvPatterns) nCol,    # variables when that block is empty
             active, if(!statedvPatterns) nCol,
-            blocks[["_others"]], gCols, tName,
+            blocks[["_others"]], gCols, if(patterns) tName,
             arguments$name) # each column is kept at its first position
   if(!is.null(columns)) { # stated columns go first, blocks being expanded where they are named
     columns <- unlist(lapply(columns, function(x)
@@ -757,6 +707,9 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   if(is.null(arguments$label)) arguments$label <- ""
   if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)
   xnc <- do.call(netCoin, arguments)
+  if(!patterns){
+    xnc[['options']][['nodeTextDynamic']] <- "scat"
+  }
   # The plane of the first two factors is the factorial analysis itself, and is named after it
   # ("PCA", "MCA"); any other pair keeps the name of its two axes, as in "F1-F3"
   if(is.na(xAxis$variable) && is.na(yAxis$variable) && xAxis$factor==1 && yAxis$factor==2)
