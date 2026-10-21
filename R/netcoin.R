@@ -306,6 +306,12 @@ addNetCoin <- function(x, ...){
 
     net <- do.call(netCoin,arguments)
 
+    # nodeTextDynamic (the tooltip surScat has the browser build out of the clusters and the
+    # position of each node) is no argument of netCoin, so the call above drops it. It goes
+    # back unless the caller has stated an ntext of their own, which then takes its place.
+    if(!is.null(options[["nodeTextDynamic"]]) && is.null(net$options[["nodeText"]]))
+      net$options[["nodeTextDynamic"]] <- options[["nodeTextDynamic"]]
+
     # netCoin builds the object anew out of its arguments, so whatever is not one of them
     # has to be carried over: the planes addAxes added, which live in $layouts, the cluster
     # centroids on each of them, which live in $clusters, and the attributes surScat attaches
