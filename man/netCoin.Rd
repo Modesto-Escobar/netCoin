@@ -26,7 +26,8 @@ netCoin(nodes = NULL, links = NULL, tree = NULL,
         fixed = showCoordinates, limits = NULL,
         main = NULL, note = NULL, showCoordinates = FALSE, showArrows = FALSE,
         showLegend = TRUE, frequencies = FALSE, statistics = FALSE,
-        showAxes = FALSE, axesLabels = NULL, scenarios = NULL, help = NULL,
+        showAxes = FALSE, axesLabels = NULL,
+        nodesLabel = NULL, linksLabel = NULL, scenarios = NULL, help = NULL,
         helpOn = FALSE, mode = c("network","heatmap"), roundedItems = FALSE,
         controls = 1:8, cex = 1, background = NULL, defaultColor = "#1f77b4",
         language = c("en","es","ca"), dir = NULL)
@@ -88,6 +89,8 @@ drl("da"), circle("ci"), Force-Atlas-2("fo"), fruchterman.reingold("fr"), gem("g
 \item{showLegend}{a logical value true if the legend is to be shown. Default = TRUE.}
 \item{showAxes}{a logical value true if the axes are to be shown. Default = FALSE.}
 \item{axesLabels}{a character vector giving the axes names.}
+\item{nodesLabel}{How should the nodes in this network be named?}
+\item{linksLabel}{How should the links in this network be named?}
 \item{language}{a character vector (es=spanish; en=english; ca=catalan).}
 \item{image}{name of the vector with image files in the nodes data frame.}
 \item{imageNames}{name of the vector with names for image files in the nodes data frame.}

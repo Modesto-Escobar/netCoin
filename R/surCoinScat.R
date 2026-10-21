@@ -707,7 +707,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   if(is.null(arguments$label)) arguments$label <- ""
   if(is.null(arguments$controls)) arguments$controls <- c(1,2,4)
   xnc <- do.call(netCoin, arguments)
-  if(!patterns){
+  if(!patterns && is.null(arguments$ntext)){
     xnc[['options']][['nodeTextDynamic']] <- "scat"
   }
   # The plane of the first two factors is the factorial analysis itself, and is named after it
