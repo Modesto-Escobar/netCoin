@@ -25,13 +25,22 @@ l4cLayout <- function(layouts) {
             paste(l4cReductions, collapse=", "), call.=FALSE)
     return(character(0))
   }
-  asked <- tolower(layouts)
+  asked <- rotationName(layouts)
   asked[asked == "mds"] <- "cmds"
+  if("all" %in% asked) { # every reduction too, next to whatever else was stated
+    layouts <- c(layouts[asked != "all"], l4cReductions)
+    asked   <- c(asked[asked != "all"],   l4cReductions)
+  }
+  own <- asked %in% rotationLayouts # rotations of surScat's own plane, which rotationAxes takes
+  layouts <- layouts[!own]
+  asked   <- asked[!own]
   bad <- layouts[!(asked %in% l4cReductions)]
   if(length(bad))
     warning("surScat has no links, so network layouts do not apply to it: ",
             paste0("\"", bad, "\"", collapse=", "), " ignored. layouts takes the names of ",
-            "dimensionality reductions: ", paste(l4cReductions, collapse=", "), call.=FALSE)
+            "dimensionality reductions: ", paste(l4cReductions, collapse=", "),
+            ", and the rotations ", paste(rotationLayouts, collapse=", "),
+            ", or \"all\" for all of them", call.=FALSE)
   unique(asked[asked %in% l4cReductions])
 }
 
@@ -163,9 +172,12 @@ l4cRun <- function(data, reductions, methods, nclusters, seed=NULL, force_execut
 # idx: the case-to-pattern map (NULL when the nodes are cases). kept: the nodes maxN drew.
 # suffix: NULL, or the suffix under which every added plane is also shown aligned by
 # Procrustes to the plane surScat drew (see layoutsAlign).
+# alignTo: NULL, or the name or index of the plane every plane is brought to, in place of the
+# plane surScat drew. A name is read as the plane's own, or as a rotation ("varimax" stands for
+# "varimax 1-2", the first pair of its components), whatever the case.
 # axesLabels: passed to addAxes; NA keeps the labels the caller stated.
 addL4C <- function(xnc, found, idx=NULL, kept=NULL, caseWeight=NULL, sort=TRUE,
-                   suffix=NULL, axesLabels=NULL) {
+                   suffix=NULL, alignTo=NULL, axesLabels=NULL) {
   if(!length(found$axes) && !length(found$clusters)) return(xnc)
 
   sel <- seq_len(if(length(found$clusters)) length(found$clusters[[1]])
@@ -200,7 +212,33 @@ addL4C <- function(xnc, found, idx=NULL, kept=NULL, caseWeight=NULL, sort=TRUE,
     xnc$clusterMeans <- currentClusterMeans(xnc)
   }
 
-  if(!is.null(suffix) && length(found$axes)) # every plane, so that the drawn one is the reference
-    xnc <- suppressMessages(layoutsAlign(xnc, "procrustes", to=1, suffix=suffix))
+  if(!is.null(suffix) && length(found$axes)) { # every plane, so that the reference is not repeated
+    planes <- names(currentLayouts(xnc))
+    to <- alignPlane(alignTo, planes)
+    xnc <- suppressMessages(layoutsAlign(xnc, "procrustes", to=to, suffix=suffix))
+  }
   xnc
+}
+
+
+## alignPlane ----
+# The plane of planes that alignTo points to, as the index layoutsAlign takes: 1, the plane
+# surScat drew, when alignTo is NULL or points to none (with a warning in this last case).
+alignPlane <- function(alignTo, planes) {
+  if(is.null(alignTo)) return(1)
+  hit <- integer(0)
+  if(is.numeric(alignTo)) hit <- if(alignTo %in% seq_along(planes)) as.integer(alignTo) else integer(0)
+  else {
+    key  <- tolower(c(alignTo, rotationName(alignTo)))
+    low  <- tolower(planes)
+    hit  <- which(low %in% key)
+    if(!length(hit)) hit <- which(Reduce(`|`, lapply(key, function(k) startsWith(low, paste0(k, " ")))))
+  }
+  if(!length(hit)) {
+    warning("alignTo=", if(is.character(alignTo)) paste0("\"", alignTo, "\"") else alignTo,
+            " is none of the planes (", paste(planes, collapse=", "),
+            "), so they are aligned to the main plane", call.=FALSE)
+    return(1)
+  }
+  hit[1]
 }

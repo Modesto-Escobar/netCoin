@@ -243,11 +243,13 @@ surCoin<-function(data,variables=names(data), commonlabel=NULL,
 
 ## surScat ----
 # surScat is a wrapper to build a netCoin object from an original non-dichotomized data.frame and see frequencies.
-surScat <- function(data, variables=names(data), active=variables, weight=NULL, patterns=FALSE, vPatterns=variables, jitter=0,
-                     type=c("mca", "pca"), xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nclusters=2, clusterOn=c("factors", "variables"), scaleClusters=NULL, nstart=25, nfactors=2, critFactors=0,
-                     sortClusters=TRUE, columns=NULL, seed=2020, maxN=2000,
-                     layouts=NULL, clusters=NULL, suffix=NULL, force_execution=FALSE,
-                     clusterIndex=c("ch", "silhouette", "bic"), ...) {
+surScat <- function(data, variables=names(data), active=variables, columns=NULL,
+                     patterns=FALSE, vPatterns=variables, weight=NULL, seed=2020, maxN=2000, jitter=0,
+                     type=c("mca", "pca"), xaxis=NULL, yaxis=NULL, scaleAxes=TRUE, nfactors=2, critFactors=0,
+                     layouts=NULL, suffix=NULL, alignTo=NULL,
+                     nclusters=2, clusterOn=c("factors", "variables"), scaleClusters=NULL, nstart=25,
+                     clusterIndex=c("ch", "silhouette", "bic"), sortClusters=TRUE,
+                     clusters=NULL, force_execution=FALSE, ...) {
   statedvPatterns <- !missing(vPatterns) # kept, as vPatterns itself may be modified below
   if(statedvPatterns) patterns <- TRUE # stating vPatterns implies patterns=TRUE
   clusterOn <- match.arg(clusterOn)
@@ -278,11 +280,17 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   ks <- ks[!duplicated(ks, fromLast=TRUE)] # a number stated twice keeps its last place
   # planes and groups to be added by looking4clusters, checked before any computation
   l4cLay  <- l4cLayout(layouts)
+  rotLay  <- rotationLayout(layouts) # rotations of the components of the main plane
   l4cMeth <- l4cClusters(clusters)
   if(!is.null(suffix) && (!is.character(suffix) || length(suffix)!=1 || !nzchar(suffix)))
     stop("suffix must be a single non-empty string")
-  if(!is.null(suffix) && !length(l4cLay))
+  if(!is.null(suffix) && !length(l4cLay) && !length(rotLay))
     warning("suffix aligns the planes added by layouts, and none was asked for", call.=FALSE)
+  if(!is.null(alignTo)) {
+    if(length(alignTo)!=1 || is.na(alignTo) || !(is.character(alignTo) || is.numeric(alignTo)))
+      stop("alignTo must be NULL, or the name or the index of one plane")
+    if(is.null(suffix)) warning("alignTo sets the plane suffix aligns to, and no suffix was stated", call.=FALSE)
+  }
   if(nfactors<1) stop("nfactors must be at least 1")
   if(length(nstart)!=1 || is.na(nstart) || nstart<1) stop("nstart must be at least 1")
   force(active); force(vPatterns) # both default to variables, which the axis variables extend below
@@ -743,10 +751,14 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
   # The planes and groups of looking4clusters are added last, so that asking for them leaves
   # everything above as it was, the sample drawn by maxN and the jitter included
   # and so are the classes of the latent model, which travel the same way
-  if(length(l4cLay) || length(l4cMeth) || length(latentM)) {
+  if(length(l4cLay) || length(rotLay) || length(l4cMeth) || length(latentM)) {
     found <- if(length(l4cLay) || length(l4cMeth))
                l4cRun(l4cData, l4cLay, l4cMeth, ksUsed, seed=seed, force_execution=force_execution)
              else list(axes=list(), clusters=list())
+    # the rotated planes come first among those added, as they are of the very components
+    found$axes <- c(rotationAxes(ff, vm, eig, caseWeight, nfactors, rotLay, type,
+                                 quiet=any(tolower(layouts) == "all"),
+                                 asked=if(is.character(layouts)) rotationName(layouts)), found$axes)
     if(length(latentM)) {
       # the BIC of nclusters="auto" has estimated it already, for every number of groups weighed
       if(is.null(latentFound) || clusterIndex!="bic")
@@ -759,7 +771,7 @@ surScat <- function(data, variables=names(data), active=variables, weight=NULL, 
       }
     }
     xnc <- addL4C(xnc, found, idx=idx, kept=kept, caseWeight=caseWeight, sort=sortClusters,
-                  suffix=suffix, axesLabels=if(statedLabels) NA)
+                  suffix=suffix, alignTo=alignTo, axesLabels=if(statedLabels) NA)
   }
   # the index behind nclusters="auto", for every number of groups it weighed
   if(!is.null(kIndex)) attr(xnc, "clusterIndex") <- kIndex
