@@ -48,9 +48,8 @@ performance problems with large matrices.}
 }
 \description{
 \code{looking4clusters} Creates interactive clustering visualization plots
-from a \code{SingleCellExperiment} object, \code{Seurat} object or a matrix.
-It can also apply dimension reduction and clustering techniques.
+from a matrix. It can also apply dimension reduction and clustering techniques.
 }
 \examples{
-obj <- looking4clusters(iris[,1:4], groups=iris[,5], threads = 2)
+obj <- looking4clusters(iris[,1:4], groups=iris[,5], running_all=FALSE)
 }
