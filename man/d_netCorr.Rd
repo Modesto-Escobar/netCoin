@@ -9,9 +9,9 @@ The function creates a list object to create a multigraph and eventually a folde
 }
 \usage{
 d_netCorr(variables, nodes = NULL, weight=NULL, 
-        pairwise=FALSE, minimum=-Inf, maximum=Inf,
-        frequency=FALSE, means=TRUE, 
-        method=c("pearson", "kendall", "spearman"), criteria="value", Bonferroni=FALSE,
+        pairwise=FALSE,
+        frequency=pairwise, means=TRUE,
+        method="pearson", criteria="value", Bonferroni=FALSE,
         minL=0, maxL=Inf,
         sortL=NULL, decreasingL=TRUE,
         factorial=c("null", "pc", "nf", "vf", "of"),
@@ -22,13 +22,11 @@ d_netCorr(variables, nodes = NULL, weight=NULL,
 \arguments{
 \item{variables}{a data frame with at least two quantitative variables.}
 \item{nodes}{a data frame with at least one vector of names and other information from the nodes}
-\item{weight}{a vector of weights. Optimal for data.framed tables}
+\item{weight}{weights of the cases: the name of a column of \code{variables} or a numeric vector. See \link{netCorr}.}
 \item{pairwise}{Pairwise mode of handling missing values if TRUE. Listwise by default.}
-\item{minimum}{minimum mean to be considered}
-\item{maximum}{maximum mean to be considered}
-\item{frequency}{a logical value true if frequencies are to be shown. Default=FALSE.}
-\item{means}{a logical value true if means are to be shown. Default=TRUE.}
-\item{method}{a vector of statistics of similarity. Pearson correlation by default. Spearman and Kendall are also possible}
+\item{frequency}{a logical value true if the frequency (number of valid cases) of each variable is to be shown in the nodes. TRUE by default only if \code{pairwise=TRUE}.}
+\item{means}{a logical value true if the mean, standard deviation, minimum and maximum of each variable are to be shown in the nodes, and the means give the size of the nodes. Default=TRUE.}
+\item{method}{measures of association. Pearson correlation by default; see \link{netCorr} for the others.}
 \item{criteria}{statistic to be use for selection criteria.}
 \item{Bonferroni}{Bonferroni criterium of the signification test.}
 \item{minL}{minimum value of the statistic to include the edge in the list.}

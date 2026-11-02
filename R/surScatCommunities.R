@@ -271,7 +271,8 @@ addCommunities <- function(scatObj, data, variables=names(data), community="lo",
   tD <- as.data.frame(t(as.matrix(D)))
   names(tD) <- sprintf(paste0("%0", nchar(nrow(D)), "d"), seq_len(nrow(D)))
 
-  N <- netCorr(tD, method=method, criteria=criteria, minL=minL, maxL=maxL, pairwise=pairwise)
+  N <- netCorr(tD, method=method[1], criteria=criteria, minL=minL, maxL=maxL, pairwise=pairwise,
+                 linkBipolar=FALSE)
   g <- toIgraph(N)
   if(igraph::vcount(g) != nrow(D))
     stop("the correlation network came back with ", igraph::vcount(g), " nodes for ",

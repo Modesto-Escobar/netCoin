@@ -108,6 +108,12 @@ caring_create_graphs <- function(data, arguments){
       corrArgs[['variables']] <- arguments[['data']][,arguments[['metric']]]
       keys <- union(names(formals(netCorr)),names(formals(netCoin)))
       corrArgs <- corrArgs[intersect(names(corrArgs),keys)]
+      # frequency is set to TRUE above for the coincidence nets; netCorr decides it by pairwise
+      corrArgs[['frequency']] <- NULL
+      # weight arrives as the name of a column of data, but variables only holds the metric ones
+      if(!is.null(corrArgs[['weight']])) corrArgs[['weight']] <- arguments[['data']][[corrArgs[['weight']]]]
+      # the criteria of the coincidences (Z, hyp) are tests of probability: p in netCorr
+      if(!is.null(corrArgs[['criteria']]) && tolower(corrArgs[['criteria']]) %in% c("z","hyp")) corrArgs[['criteria']] <- "p"
       net1 <- do.call(netCorr,corrArgs)
     }else{
       keys <- union(names(formals(surCoin)),names(formals(netCoin)))
