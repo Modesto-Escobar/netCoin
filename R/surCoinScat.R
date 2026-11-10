@@ -274,6 +274,20 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
     stop("nclusters must hold positive whole numbers, optionally next to \"auto\", or be 0")
   keepAllK <- !autoK || length(ks)>0
   statedKs <- length(ks)>0
+  # a single group is no clustering: it would add a constant group variable, which no statistic
+  # of the page can use, so it never gets one. Stated alone, nclusters=1 makes no groups, as
+  # nclusters=0 does. Next to "auto" the BIC can still weigh it (weighOne), to find out whether
+  # the cases are better described by no groups at all; the other indexes are not defined for it
+  weighOne <- FALSE
+  if(any(ks==1)) {
+    ks <- ks[ks!=1]
+    weighOne <- autoK && clusterIndex=="bic"
+    if(!autoK && !length(ks)) {
+      noK <- TRUE
+      warning("nclusters=1 makes no groups, as a single group is no clustering: the plane is drawn alone, as with nclusters=0", call.=FALSE)
+    } else if(!weighOne)
+      warning("nclusters: 1 group left out, as a single group is no clustering", call.=FALSE)
+  }
   if(autoK && !statedKs) ks <- 2:10
   if(autoK && !any(ks>=2)) stop("nclusters=\"auto\" needs at least one number of groups above 1")
   if(!autoK && !noK && !length(ks)) stop("nclusters must state at least one number of groups")
@@ -419,7 +433,7 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
   latentM <- latentClusters(l4cMeth, type)
   l4cMeth <- intersect(l4cMeth, l4cMethods)
   if(noK && (length(l4cMeth) || length(latentM))) { # they take their numbers of groups from nclusters
-    warning("clusters left out: nclusters=0 states no number of groups to make", call.=FALSE)
+    warning("clusters left out: nclusters states no number of groups to make", call.=FALSE)
     l4cMeth <- character(0)
     latentM <- character(0)
   }
@@ -506,17 +520,20 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
   # nstart times over and the best of those runs is kept
   fits <- lapply(ks, function(i) stats::kmeans(cm, centers=i, nstart=nstart))
   kIndex <- NULL
+  kAll <- ks # the numbers of groups the index weighs: those of the solutions, and 1 for the BIC when stated
   if(autoK && clusterIndex=="bic") {
     # the BIC is that of the latent model suiting the type of analysis, which then settles the
     # number of groups of every method; without its package, Calinski-Harabasz stands in for
     # it, as the index of k-means closest to it (both rest on the within-group variance)
     bicModel <- latentModel(type)
     if(requireNamespace(latentPackage[[bicModel]], quietly=TRUE)) {
-      latentFound <- latentRun(latentData, bicModel, ks, seed=seed)
+      if(weighOne) kAll <- c(1, ks)
+      latentFound <- latentRun(latentData, bicModel, kAll, seed=seed)
       if(all(is.na(latentFound$bic))) {
         warning("the BIC of ", bicModel, " could not be computed for any number of groups: ",
                 "Calinski-Harabasz is used instead", call.=FALSE)
         clusterIndex <- "ch"
+        kAll <- ks
       }
     } else {
       warning("clusterIndex=\"bic\" needs '", latentPackage[[bicModel]], "' to estimate ", bicModel,
@@ -549,8 +566,11 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
       sum(vapply(split(seq_len(n), cl), function(i)
         sum(sweep(em[i, , drop=FALSE], 2, colMeans(em[i, , drop=FALSE]))^2), numeric(1)))
     if(clusterIndex=="bic") { # the lower the better, and defined for a single group as well
-      val <- unname(latentFound$bic)
-      best <- which.min(val)
+      val <- unname(latentFound$bic) # over kAll, which holds 1 first when it is weighed
+      bestAll <- which.min(val)
+      oneWins <- length(kAll)>length(ks) && length(bestAll) && bestAll==1
+      # when no groups at all suit the cases best, no solution is the main one: NA
+      best <- if(oneWins) NA_integer_ else bestAll-(length(kAll)-length(ks))
     } else {
       val <- vapply(seq_along(ks), function(j) {
         k <- ks[j]
@@ -564,19 +584,24 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
           if(!is.matrix(cs)) NA_real_ else mean(cs[, "sil_width"])
         }
       }, numeric(1))
-      best <- which.max(val)
+      best <- bestAll <- which.max(val)
+      oneWins <- FALSE
     }
     if(!length(best)) stop("clusterIndex could not be computed for any number of groups")
-    kIndex <- data.frame(k=ks, value=val, optimal=seq_along(ks)==best)
+    kIndex <- data.frame(k=kAll, value=val, optimal=seq_along(kAll)==bestAll)
     names(kIndex)[2] <- clusterIndex
     indexName <- switch(clusterIndex, ch="Calinski-Harabasz", silhouette="silhouette",
                         bic=paste0("BIC of ", bicModel))
     attr(kIndex, "index") <- indexName
-    message("nclusters=\"auto\": ", ks[best], " groups, by ", indexName)
-    # the chosen solution goes last, which makes it the main one: it colors the graph
-    jOrder <- if(keepAllK) c(setdiff(seq_along(ks), best), best) else best
+    if(oneWins) message("nclusters=\"auto\": 1 group (no clustering), by ", indexName,
+                        "; every case takes the same color")
+    else message("nclusters=\"auto\": ", ks[best], " groups, by ", indexName)
+    # the group variables keep the order the numbers were stated in; the chosen solution is the
+    # one that colors the graph (none, when one group suits best), wherever it stands
+    jOrder <- if(keepAllK) seq_along(ks) else best
   } else jOrder <- seq_along(ks)
   ksUsed <- ks[jOrder]
+  gMain <- NULL # the group variable coloring the graph
   for(j in jOrder) {
     i  <- ks[j]
     cl <- fits[[j]]$cluster
@@ -590,6 +615,7 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
     labels <- paste0(groupWord,": ",sprintf(paste0("%0",nchar(i),"d"),seq_len(i)))
     B[[g]] <- factor(labels[cl], levels=labels, ordered=TRUE)
     gCols <- c(gCols, g)
+    if(!autoK || j %in% best) gMain <- g # without "auto", the last one is the main solution
   }
   idx <- NULL # will hold case-to-pattern mapping if patterns=TRUE
   shares <- NULL # and the cases of every group in every pattern
@@ -701,7 +727,7 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
   arguments$nodes <- B
   arguments$layout <- cc
   # the main k-means solution colors the cases, unless color states a variable to color them by
-  if(is.null(arguments$color) && length(gCols)) arguments$color <- g
+  if(is.null(arguments$color) && length(gCols)) arguments$color <- gMain
   arguments$frequencies <- TRUE
   arguments$showAxes <- TRUE
   if(is.null(arguments$axesLabels)) # a factorial axis is labelled with its percentage of
