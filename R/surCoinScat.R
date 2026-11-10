@@ -308,6 +308,15 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
   if(nfactors<1) stop("nfactors must be at least 1")
   if(length(nstart)!=1 || is.na(nstart) || nstart<1) stop("nstart must be at least 1")
   force(active); force(vPatterns) # both default to variables, which the axis variables extend below
+  # a variable named twice (as in variables=c("a", "b", extra=c("a", "c"))) would be repeated in
+  # the text of every node, and its names mean nothing here: each variable is kept once
+  repeated <- unique(c(variables[duplicated(variables)], active[duplicated(active)],
+                       vPatterns[duplicated(vPatterns)]))
+  if(length(repeated))
+    warning("variables named more than once are kept once: ", toString(repeated), call.=FALSE)
+  variables <- unique(unname(variables))
+  active    <- unique(unname(active))
+  vPatterns <- unique(unname(vPatterns))
   # each plotted axis is either a factorial one (a number, or a name such as "F1" or "PC2") or an
   # observed variable of the data frame, optionally followed by a logical stating whether to
   # standardize that axis. c() coerces such a pair to character, which as.logical undoes
@@ -645,7 +654,10 @@ surScat <- function(data, variables=names(data), active=variables, columns=NULL,
           ordered_unique <- names(freq)[order(-freq, names(freq))]
           paste(as.character(ordered_unique), collapse="|")
         }, character(1))
-        newB[[v]] <- orderedGroups
+        # kept as a factor, whose levels are the groups first, in order, and the combinations
+        # a pattern holds after them: the page numbers the mark of each centroid by the place
+        # of its group among the levels, which a plain character column would not give it
+        newB[[v]] <- patternGroups(orderedGroups, levels(B[[v]]))
       }
       else if(is.numeric(data[[v]]))
         newB[[v]] <- vapply(groups, function(i) wmean(D[[v]][i], weight[i]), numeric(1))

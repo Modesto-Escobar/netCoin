@@ -262,6 +262,20 @@ validateClusterOrder <- function(clusters, sourceData, nCases) {
 }
 
 
+## patternGroups ----
+# The group of every node when the nodes are patterns, as an ordered factor. A pattern whose
+# cases fall in several groups holds a combination of them ("Group: 2|Group: 1"), so the values
+# are not just the groups; the levels are the groups first, in the order given, and then the
+# combinations in text order (which follows the group numbers, as they are padded).
+# The page numbers the mark of each centroid by the place of its group among the levels, so the
+# groups must lead them, even those that no pattern holds on its own.
+# values: the group, or combination of groups, of every node; groups: the labels of the groups.
+patternGroups <- function(values, groups) {
+  values <- as.character(values)
+  factor(values, levels=c(groups, sort(setdiff(unique(values), groups))), ordered=TRUE)
+}
+
+
 ## clusterShares ----
 # How many cases (or how much case weight) of every group every node holds: a matrix with one
 # row per node and one column per group, named by its label. It is what a centroid needs when
@@ -676,9 +690,14 @@ addOneCluster <- function(scatObj, clusters, name=NULL, sort=TRUE, weight=NULL, 
 
   # Levels must follow the group number, not the order the values happen to appear in.
   # The residual group carries the highest number, so padding keeps it last here too.
-  unique_cl_values <- unique_cl_values[order(vapply(unique_cl_values,
-                                                    function(val) paste(padded(val), collapse="|"),
-                                                    character(1)))]
+  # The groups themselves lead them, even those no pattern holds on its own, and the
+  # combinations of several groups (patterns spanning them) follow: the page numbers the mark
+  # of each centroid by the place of its group among the levels.
+  byNumber <- function(vals) vals[order(vapply(vals, function(val) paste(padded(val), collapse="|"),
+                                               character(1)))]
+  aloneVals <- unique_cl_values[!grepl("|", unique_cl_values, fixed=TRUE)]
+  singleVals <- union(aloneVals, as.character(unlist(lapply(unique_cl_values, splitGroups))))
+  unique_cl_values <- c(byNumber(singleVals), byNumber(setdiff(unique_cl_values, singleVals)))
 
   # Create labels by adding prefix to each cluster number. The residual group reads as a
   # word rather than a number, so that it cannot be taken for one more group of the series.
