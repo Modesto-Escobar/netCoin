@@ -1,6 +1,5 @@
 \name{netExhibit}
 \alias{netExhibit}
-\alias{netGallery2}
 \title{Images in a grid gallery.}
 \description{
 \code{netExhibit} produces an interactive image gallery (alternative display). 

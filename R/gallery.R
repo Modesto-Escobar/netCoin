@@ -1,9 +1,5 @@
 gallery <- gallery_rd3
 
-gallery2 <- function(...){
-  warning("Using 'gallery2' function is deprecated. Use 'exhibit' instead.")
-  do.call(gallery2_rd3,list(...))
-}
 exhibit <- gallery2_rd3
 
 gallery3 <- gallery3_rd3
@@ -83,11 +79,6 @@ netGalleryWrapper <- function(treeGallery_function, tree, deep, initialType, tab
 
 netGallery <- function(tree, deep = FALSE, initialType = NULL, tableformat = FALSE, ...){
   return(netGalleryWrapper(treeGallery_rd3, tree, deep, initialType, tableformat, ...))
-}
-
-netGallery2 <- function(tree, initialType = NULL, tableformat = FALSE, ...){
-  warning("Using 'netGallery2' function is deprecated. Use 'netExhibit' instead.")
-  return(netExhibit(tree, initialType, tableformat, ...))
 }
 
 netExhibit <- function(tree, initialType = NULL, tableformat = FALSE, ...){

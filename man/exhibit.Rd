@@ -1,6 +1,5 @@
 \name{exhibit}
 \alias{exhibit}
-\alias{gallery2}
 \title{Images in a grid gallery.}
 \description{
 \code{exhibit} produces an interactive image gallery (alternative display).
